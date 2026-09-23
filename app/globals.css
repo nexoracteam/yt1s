@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #fff7ed;
+  --foreground: #111827;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--foreground);
+  background:
+    radial-gradient(circle at top left, rgba(255, 107, 53, 0.18), transparent 32rem),
+    linear-gradient(180deg, #fff7ed 0%, #ffffff 42%, #fff7ed 100%);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
