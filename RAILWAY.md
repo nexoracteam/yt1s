@@ -19,8 +19,8 @@ If `nexoracteam/yt1s` does not show in Railway after logging in with GitHub:
 ## Deploy Worker on Railway
 
 1. Create a new Railway project from GitHub repo `nexoracteam/yt1s`.
-2. Set the service root directory to `worker`.
-3. Railway should detect the `Dockerfile` automatically.
+2. Railway should detect the root `Dockerfile` automatically.
+3. The root `Dockerfile` builds the `worker/` service only.
 4. Add environment variables:
 
 ```env
