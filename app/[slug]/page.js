@@ -7,18 +7,20 @@ export function generateStaticParams() {
   return [...allToolSlugs(), ...Object.keys(legalPages)].map((slug) => ({ slug }));
 }
 
-export function generateMetadata({ params }) {
-  const tool = getTool(params.slug);
-  const page = legalPages[params.slug];
+export async function generateMetadata({ params }) {
+  const { slug } = await params;
+  const tool = getTool(slug);
+  const page = legalPages[slug];
   if (!tool && !page) return {};
   const title = tool?.title || page.title;
   const description = tool?.summary || page.body;
   return { title: `${title} | yt1s.video`, description };
 }
 
-export default function DynamicPage({ params }) {
-  const tool = getTool(params.slug);
-  const page = legalPages[params.slug];
+export default async function DynamicPage({ params }) {
+  const { slug } = await params;
+  const tool = getTool(slug);
+  const page = legalPages[slug];
 
   if (page) {
     return (
