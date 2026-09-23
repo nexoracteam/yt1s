@@ -176,6 +176,68 @@ function DownloadResults({ result }) {
   );
 }
 
+function WorkerDownloadPanel({ input }) {
+  const [quality, setQuality] = useState("720p");
+  const [job, setJob] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function poll(jobId) {
+    for (let index = 0; index < 120; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const response = await fetch(`/api/worker-download?jobId=${encodeURIComponent(jobId)}`);
+      const data = await response.json();
+      setJob(data);
+      if (["completed", "failed"].includes(data.status)) return data;
+    }
+    throw new Error("Download is still processing. Check again later.");
+  }
+
+  async function startDownload() {
+    setError("");
+    setLoading(true);
+    setJob(null);
+    try {
+      const response = await fetch("/api/worker-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: input, quality })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not start worker download.");
+      setJob(data);
+      const finalJob = await poll(data.jobId);
+      if (finalJob.status === "failed") throw new Error(finalJob.error || "Download failed.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+      <h3 className="text-lg font-black text-ink dark:text-white">Railway Video Download</h3>
+      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Use the Railway worker for real yt-dlp + ffmpeg processing and Cloudinary download links.</p>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <select value={quality} onChange={(event) => setQuality(event.target.value)} className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-bold text-ink dark:border-white/10 dark:bg-zinc-800 dark:text-white">
+          <option value="360p">360p MP4</option>
+          <option value="480p">480p MP4</option>
+          <option value="720p">720p MP4</option>
+          <option value="1080p">1080p MP4</option>
+          <option value="audio">Audio M4A</option>
+        </select>
+        <button type="button" onClick={startDownload} disabled={loading || !input} className="rounded-2xl bg-flame px-5 py-3 text-sm font-black text-white disabled:opacity-60">
+          {loading ? "Processing..." : "Start Download"}
+        </button>
+      </div>
+      {job && <div className="mt-4 rounded-2xl bg-orange-50 p-4 text-sm font-semibold text-orange-900 dark:bg-orange-500/10 dark:text-orange-100">Status: {job.status}</div>}
+      {job?.downloadUrl && <a href={job.downloadUrl} className="mt-4 inline-flex rounded-full bg-ink px-5 py-3 text-sm font-black text-white dark:bg-white dark:text-ink">Download File</a>}
+      {error && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">{error}</div>}
+    </div>
+  );
+}
+
 export default function ToolClient({ tool }) {
   const [input, setInput] = useState("");
   const [time, setTime] = useState("");
@@ -226,6 +288,7 @@ export default function ToolClient({ tool }) {
         {submitted && tool.mode === "calculator" && <EngagementResults input={input} />}
         {submitted && tool.mode === "timestamp" && <TimestampResults input={input} time={time} />}
         <DownloadResults result={downloadResult} />
+        {submitted && tool.mode === "download" && <WorkerDownloadPanel input={input} />}
       </div>
     </section>
   );
