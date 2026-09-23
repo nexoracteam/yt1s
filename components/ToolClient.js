@@ -139,6 +139,7 @@ function TimestampResults({ input, time }) {
 
 function DownloadResults({ result }) {
   if (!result) return null;
+  const watchUrl = result.videoId ? `https://www.youtube.com/watch?v=${result.videoId}` : "";
   return (
     <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
@@ -146,7 +147,11 @@ function DownloadResults({ result }) {
         <div>
           <h3 className="text-xl font-black text-ink dark:text-white">{result.title || "Video result"}</h3>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{result.note}</p>
-          {result.cloudinaryUrl && <a href={result.cloudinaryUrl} className="mt-4 inline-flex rounded-full bg-flame px-5 py-3 text-sm font-black text-white">Download from Cloudinary</a>}
+          <div className="mt-4 flex flex-wrap gap-3">
+            {watchUrl && <a href={watchUrl} target="_blank" rel="noreferrer" className="rounded-full border border-red-200 px-4 py-2 text-sm font-black text-flame dark:border-red-500/40">Watch Preview</a>}
+            {result.thumbnail && <a href={result.thumbnail} target="_blank" rel="noreferrer" className="rounded-full border border-orange-200 px-4 py-2 text-sm font-black text-ink dark:border-white/10 dark:text-white">Open Thumbnail</a>}
+            {result.cloudinaryUrl && <a href={result.cloudinaryUrl} className="rounded-full bg-flame px-5 py-2 text-sm font-black text-white">Download from Cloudinary</a>}
+          </div>
         </div>
       </div>
       {result.formats?.length > 0 && (
@@ -160,6 +165,11 @@ function DownloadResults({ result }) {
               {format.url && <a href={format.url} target="_blank" rel="noreferrer" className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Open Stream</a>}
             </div>
           ))}
+        </div>
+      )}
+      {result.formats?.length === 0 && (
+        <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm font-semibold text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-100">
+          Direct video formats are temporarily blocked by YouTube for this serverless request, but the title, preview, and thumbnails were fetched successfully.
         </div>
       )}
     </div>
