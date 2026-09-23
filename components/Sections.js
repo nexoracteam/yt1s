@@ -1,11 +1,13 @@
 import Link from "next/link";
+import { ArrowRight, BadgeCheck, Clock3, DownloadCloud, Layers3, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { toolCategories, tools } from "../lib/tools";
+import Reveal from "./Reveal";
 
 export function HowItWorks() {
   const steps = [
-    ["01", "Paste a URL", "Drop in a public YouTube video, Shorts, channel, playlist, or a plain topic depending on the tool."],
-    ["02", "Process Safely", "Vercel API routes fetch lightweight metadata and only attempt Cloudinary storage when the file is suitable."],
-    ["03", "Download or Copy", "Use thumbnails, direct stream links, generated text, calculators, or API-ready metadata outputs instantly."]
+    ["01", "Paste a URL", "Drop in a public YouTube video, Short, channel, playlist, or creator topic."],
+    ["02", "Pick Your Format", "Choose video quality, audio, thumbnail size, or the creator tool you want to use."],
+    ["03", "Save the Result", "Download the processed file, copy metadata, or use the generated creator asset instantly."]
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
@@ -15,11 +17,11 @@ export function HowItWorks() {
       </div>
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {steps.map(([number, title, body]) => (
-          <div key={number} className="rounded-[2rem] border border-orange-100 bg-white p-8 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+          <Reveal key={number} className="rounded-[2rem] border border-orange-100 bg-white p-8 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
             <div className="text-5xl font-black text-orange-100">{number}</div>
             <h3 className="mt-4 text-xl font-black text-ink dark:text-white">{title}</h3>
             <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{body}</p>
-          </div>
+          </Reveal>
         ))}
       </div>
     </section>
@@ -30,9 +32,9 @@ export function FeatureGrid({ tool }) {
   return (
     <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {tool.features.map((feature) => (
+        {tool.features.map((feature, index) => (
           <div key={feature} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:shadow-none">
-            <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-xl font-black text-flame">✓</div>
+            <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-flame dark:bg-flame/10">{[<Zap key="z" />, <ShieldCheck key="s" />, <DownloadCloud key="d" />, <BadgeCheck key="b" />][index % 4]}</div>
             <h3 className="font-black text-ink dark:text-white">{feature}</h3>
             <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Built into the {tool.title} workflow with a fast, mobile-friendly interface.</p>
           </div>
@@ -57,7 +59,7 @@ export function ToolDirectory() {
               {category.tools.map((slug) => (
                 <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-flame hover:text-white dark:bg-zinc-800 dark:text-gray-200 dark:hover:bg-flame">
                   {tools[slug].title}
-                  <span>→</span>
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
               ))}
             </div>
@@ -70,9 +72,9 @@ export function ToolDirectory() {
 
 export function Pricing() {
   const plans = [
-    ["Free", "$0", "All public tools, thumbnails, generators, calculators, and Vercel-safe metadata."],
-    ["Cloudinary", "API", "Connect your Cloudinary keys to store supported direct files and return CDN links."],
-    ["Pro Backend", "Later", "Add a worker later for ffmpeg merge, long videos, MP3 conversion, and 4K reliability."]
+    ["Fast", "Instant", "Paste a link and get previews, thumbnails, formats, and creator-ready outputs without clutter."],
+    ["Secure", "Cloud", "Processed downloads are delivered through secure cloud links with no public account required."],
+    ["Creator", "Toolkit", "Use downloader, SEO, thumbnails, timestamps, and analytics tools from one polished workspace."]
   ];
   return (
     <section id="pricing" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
@@ -80,6 +82,7 @@ export function Pricing() {
         {plans.map(([name, price, text]) => (
           <div key={name} className="rounded-[2rem] bg-ink p-8 text-white shadow-2xl shadow-gray-300">
             <h3 className="text-2xl font-black">{name}</h3>
+            <div className="mt-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-orange-200">{name === "Fast" ? <Zap /> : name === "Secure" ? <ShieldCheck /> : <Layers3 />}</div>
             <div className="mt-4 text-4xl font-black text-orange-200">{price}</div>
             <p className="mt-4 text-sm leading-6 text-gray-300">{text}</p>
           </div>
@@ -91,10 +94,10 @@ export function Pricing() {
 
 export function FAQ() {
   const questions = [
-    ["Does yt1s.video work on Vercel only?", "Yes. The current app is built for Vercel. Heavy downloads are handled with safeguards because serverless functions are limited."],
-    ["Why use Cloudinary?", "Cloudinary gives CDN delivery and storage links for supported media without turning Vercel into permanent file storage."],
-    ["Is every 1080p or 4K download guaranteed?", "No. Many high quality YouTube formats require merging video and audio with ffmpeg, which is not reliable on Vercel-only hosting."],
-    ["Are AI tools active?", "Not yet. The AI/OpenAI part is intentionally left out for now; template tools are included until keys are added."]
+    ["Is yt1s.video free to use?", "Yes. Core downloader, thumbnail, timestamp, and creator tools are available without account signup."],
+    ["Which formats are supported?", "Supported public videos can be processed into MP4 video or audio-ready files depending on source availability."],
+    ["Can I download thumbnails?", "Yes. MaxRes, standard, high, medium, and default YouTube thumbnail sizes are available instantly."],
+    ["What content can I download?", "Only download content you own, have permission to use, or are legally allowed to access." ]
   ];
   return (
     <section className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">

@@ -1,3 +1,4 @@
+import { DownloadCloud, Gauge, Globe2, ShieldCheck } from "lucide-react";
 import ToolClient from "../components/ToolClient";
 import { FAQ, HowItWorks, Pricing, ToolDirectory } from "../components/Sections";
 import { brand, tools } from "../lib/tools";
@@ -16,8 +17,8 @@ export default function Home() {
         </div>
         <div className="mt-10"><ToolClient tool={mainTool} /></div>
         <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 text-center md:grid-cols-4">
-          {["Cloudinary Ready", "Vercel Hosted", "20+ Tools", "No AI Keys Yet"].map((item) => (
-            <div key={item} className="rounded-3xl bg-white p-5 font-black text-ink shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:text-white dark:shadow-none">{item}</div>
+          {[["Fast Downloads", DownloadCloud], ["Secure Links", ShieldCheck], ["20+ Tools", Globe2], ["Smooth UX", Gauge]].map(([item, Icon]) => (
+            <div key={item} className="rounded-3xl bg-white p-5 font-black text-ink shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:text-white dark:shadow-none"><Icon className="mx-auto mb-3 h-5 w-5 text-flame" />{item}</div>
           ))}
         </div>
       </section>

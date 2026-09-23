@@ -3,6 +3,8 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState } from "react";
+import { motion } from "framer-motion";
+import { CheckCircle2, Clipboard, Download, Eye, Film, ImageDown, Loader2, Music2, Play, Sparkles } from "lucide-react";
 import { extractVideoId, thumbnailSet, timestampUrl, toTimestampSeconds } from "../lib/youtube";
 
 function CopyButton({ text, label = "Copy" }) {
@@ -15,9 +17,9 @@ function CopyButton({ text, label = "Copy" }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1300);
       }}
-      className="rounded-full border border-orange-200 px-4 py-2 text-sm font-bold text-ink hover:border-flame hover:text-flame"
+      className="inline-flex items-center gap-2 rounded-full border border-orange-200 px-4 py-2 text-sm font-bold text-ink hover:border-flame hover:text-flame dark:border-white/10 dark:text-white"
     >
-      {copied ? "Copied" : label}
+      <Clipboard className="h-4 w-4" /> {copied ? "Copied" : label}
     </button>
   );
 }
@@ -71,17 +73,17 @@ function GeneratorResults({ tool, input }) {
 
   const output = items.join(tool.title.includes("Tag") ? ", " : "\n\n");
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+    <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-black text-ink dark:text-white">Generated Output</h3>
         <CopyButton text={output} />
       </div>
       <div className="space-y-3">
         {items.map((item) => (
-          <div key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-800 whitespace-pre-line dark:bg-zinc-800 dark:text-gray-100">{item}</div>
+          <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-800 whitespace-pre-line dark:bg-zinc-800 dark:text-gray-100">{item}</motion.div>
         ))}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -91,17 +93,17 @@ function ThumbnailResults({ input }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {thumbnailSet(videoId).map((thumb) => (
-        <div key={thumb.url} className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} key={thumb.url} className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
           <img src={thumb.url} alt={thumb.label} className="aspect-video w-full bg-orange-50 object-cover" />
           <div className="p-4">
             <div className="font-black text-ink dark:text-white">{thumb.label}</div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{thumb.quality}</div>
             <div className="mt-4 flex gap-2">
-              <a href={thumb.url} target="_blank" rel="noreferrer" className="rounded-full bg-flame px-4 py-2 text-sm font-bold text-white">Open</a>
-              <a href={thumb.url} download className="rounded-full border border-orange-200 px-4 py-2 text-sm font-bold text-ink">Download</a>
+              <a href={thumb.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full bg-flame px-4 py-2 text-sm font-bold text-white"><Eye className="h-4 w-4" />Open</a>
+              <a href={thumb.url} download className="inline-flex items-center gap-2 rounded-full border border-orange-200 px-4 py-2 text-sm font-bold text-ink dark:border-white/10 dark:text-white"><ImageDown className="h-4 w-4" />Download</a>
             </div>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -129,11 +131,11 @@ function TimestampResults({ input, time }) {
   const url = timestampUrl(input, seconds);
   if (!url) return null;
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+    <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="text-sm font-bold text-gray-500 dark:text-gray-400">Timestamp Link</div>
       <a href={url} target="_blank" rel="noreferrer" className="mt-2 block break-all text-lg font-black text-flame">{url}</a>
       <div className="mt-4"><CopyButton text={url} /></div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -141,16 +143,16 @@ function DownloadResults({ result }) {
   if (!result) return null;
   const watchUrl = result.videoId ? `https://www.youtube.com/watch?v=${result.videoId}` : "";
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+    <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
         {result.thumbnail && <img src={result.thumbnail} alt="Video thumbnail" className="aspect-video w-full rounded-2xl object-cover" />}
         <div>
           <h3 className="text-xl font-black text-ink dark:text-white">{result.title || "Video result"}</h3>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{result.note}</p>
           <div className="mt-4 flex flex-wrap gap-3">
-            {watchUrl && <a href={watchUrl} target="_blank" rel="noreferrer" className="rounded-full border border-red-200 px-4 py-2 text-sm font-black text-flame dark:border-red-500/40">Watch Preview</a>}
-            {result.thumbnail && <a href={result.thumbnail} target="_blank" rel="noreferrer" className="rounded-full border border-orange-200 px-4 py-2 text-sm font-black text-ink dark:border-white/10 dark:text-white">Open Thumbnail</a>}
-            {result.cloudinaryUrl && <a href={result.cloudinaryUrl} className="rounded-full bg-flame px-5 py-2 text-sm font-black text-white">Download from Cloudinary</a>}
+            {watchUrl && <a href={watchUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 text-sm font-black text-flame dark:border-red-500/40"><Play className="h-4 w-4" />Watch Preview</a>}
+            {result.thumbnail && <a href={result.thumbnail} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-orange-200 px-4 py-2 text-sm font-black text-ink dark:border-white/10 dark:text-white"><ImageDown className="h-4 w-4" />Open Thumbnail</a>}
+            {result.cloudinaryUrl && <a href={result.cloudinaryUrl} className="inline-flex items-center gap-2 rounded-full bg-flame px-5 py-2 text-sm font-black text-white"><Download className="h-4 w-4" />Download File</a>}
           </div>
         </div>
       </div>
@@ -159,7 +161,7 @@ function DownloadResults({ result }) {
           {result.formats.map((format) => (
             <div key={`${format.itag || format.formatId}-${format.url || format.mimeType}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-orange-50 p-4 dark:bg-zinc-800">
               <div>
-                <div className="font-black text-ink dark:text-white">{format.qualityLabel || format.audioQuality || format.quality || "Format"} {format.container ? `.${format.container}` : ""}</div>
+                <div className="flex items-center gap-2 font-black text-ink dark:text-white">{format.hasVideo ? <Film className="h-4 w-4 text-flame" /> : <Music2 className="h-4 w-4 text-flame" />}{format.qualityLabel || format.audioQuality || format.quality || "Format"} {format.container ? `.${format.container}` : ""}</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">{format.hasVideo ? "video" : ""} {format.hasAudio ? "audio" : ""} {format.contentLength ? ` · ${(Number(format.contentLength) / 1024 / 1024).toFixed(1)} MB` : ""}</div>
               </div>
               {format.url && <a href={format.url} target="_blank" rel="noreferrer" className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Open Stream</a>}
@@ -169,10 +171,10 @@ function DownloadResults({ result }) {
       )}
       {result.formats?.length === 0 && (
         <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm font-semibold text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-100">
-          Direct video formats are temporarily blocked by YouTube for this serverless request, but the title, preview, and thumbnails were fetched successfully.
+          Preview and thumbnails are ready. Use the secure download processor below to create a downloadable file.
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -204,7 +206,7 @@ function WorkerDownloadPanel({ input }) {
         body: JSON.stringify({ url: input, quality })
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not start worker download.");
+      if (!response.ok) throw new Error(data.error || "Could not start download.");
       setJob(data);
       const finalJob = await poll(data.jobId);
       if (finalJob.status === "failed") throw new Error(finalJob.error || "Download failed.");
@@ -217,8 +219,8 @@ function WorkerDownloadPanel({ input }) {
 
   return (
     <div className="mt-6 rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
-      <h3 className="text-lg font-black text-ink dark:text-white">Railway Video Download</h3>
-      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Use the Railway worker for real yt-dlp + ffmpeg processing and Cloudinary download links.</p>
+      <h3 className="flex items-center gap-2 text-lg font-black text-ink dark:text-white"><Download className="h-5 w-5 text-flame" /> Secure Video Download</h3>
+      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Choose a format and generate a downloadable cloud file. Longer videos can take a little time to process.</p>
       <div className="mt-4 flex flex-wrap gap-3">
         <select value={quality} onChange={(event) => setQuality(event.target.value)} className="rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-bold text-ink dark:border-white/10 dark:bg-zinc-800 dark:text-white">
           <option value="360p">360p MP4</option>
@@ -228,11 +230,11 @@ function WorkerDownloadPanel({ input }) {
           <option value="audio">Audio M4A</option>
         </select>
         <button type="button" onClick={startDownload} disabled={loading || !input} className="rounded-2xl bg-flame px-5 py-3 text-sm font-black text-white disabled:opacity-60">
-          {loading ? "Processing..." : "Start Download"}
+          {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing...</span> : <span className="inline-flex items-center gap-2"><Download className="h-4 w-4" />Start Download</span>}
         </button>
       </div>
-      {job && <div className="mt-4 rounded-2xl bg-orange-50 p-4 text-sm font-semibold text-orange-900 dark:bg-orange-500/10 dark:text-orange-100">Status: {job.status}</div>}
-      {job?.downloadUrl && <a href={job.downloadUrl} className="mt-4 inline-flex rounded-full bg-ink px-5 py-3 text-sm font-black text-white dark:bg-white dark:text-ink">Download File</a>}
+      {job && <div className="mt-4 rounded-2xl bg-orange-50 p-4 text-sm font-semibold text-orange-900 dark:bg-orange-500/10 dark:text-orange-100"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />} Status: {job.status}</span></div>}
+      {job?.downloadUrl && <a href={job.downloadUrl} className="mt-4 inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-black text-white dark:bg-white dark:text-ink"><Download className="h-4 w-4" />Download File</a>}
       {error && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">{error}</div>}
     </div>
   );
@@ -276,11 +278,11 @@ export default function ToolClient({ tool }) {
       <form onSubmit={submit} className="rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:flex">
         <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className="min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white" required />
         {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white sm:w-44" required />}
-        <button disabled={loading} className="min-h-14 rounded-3xl bg-gradient-to-r from-flame to-ember px-8 font-black text-white shadow-glow disabled:opacity-60">
-          {loading ? "Working..." : tool.action}
+        <button disabled={loading} className="min-h-14 rounded-3xl bg-gradient-to-r from-flame to-ember px-8 font-black text-white shadow-glow transition hover:scale-[1.02] disabled:opacity-60">
+          {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Working...</span> : <span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4" />{tool.action}</span>}
         </button>
       </form>
-      <p className="mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500">Cloudinary-ready storage · Vercel-safe processing</p>
+      <p className="mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400">Fast preview · Secure processing · Clean downloads</p>
       {error && <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-5 text-red-700">{error}</div>}
       <div className="mt-10">
         {submitted && tool.mode === "thumbnail" && <ThumbnailResults input={input} />}

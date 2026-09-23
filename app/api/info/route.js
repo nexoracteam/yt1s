@@ -59,7 +59,7 @@ function fallbackResponse(videoId, fallback, reason) {
     limited: true,
     blockReason: safeReason,
     note:
-      "YouTube blocked direct stream extraction from this serverless request, so yt1s.video loaded public metadata and thumbnails only. Try a different public video or use thumbnail tools; full video extraction may require cookies/proxy or a dedicated worker."
+      "Preview and thumbnails are ready. If instant formats are unavailable, use the secure download processor to create a downloadable file."
   }, { status: 200 });
 }
 
@@ -124,8 +124,8 @@ export async function POST(req) {
       cloudinaryUrl,
       cloudinaryStatus,
       note: cloudinaryUrl
-        ? "Stored on Cloudinary and ready for download."
-        : "Direct formats are shown below. Cloudinary upload only runs when credentials exist and the file is small enough for Vercel limits."
+        ? "Your file is ready for download."
+        : "Preview formats are shown below. Use the secure download processor for a final downloadable file."
     });
   } catch (error) {
     return NextResponse.json(

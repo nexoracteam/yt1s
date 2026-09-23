@@ -11,12 +11,20 @@ export const metadata = {
   metadataBase: new URL("https://yt1s.video"),
   title: `${brand.name} - Free YouTube Downloader & Creator Tools`,
   description: brand.description,
+  keywords: ["YouTube downloader", "YouTube thumbnail downloader", "YouTube to MP3", "download YouTube Shorts", "YouTube SEO tools", "yt1s.video"],
+  alternates: {
+    canonical: "https://yt1s.video"
+  },
   openGraph: {
     title: `${brand.name} - Free YouTube Downloader & Creator Tools`,
     description: brand.description,
     url: "https://yt1s.video",
     siteName: brand.name,
     type: "website"
+  },
+  robots: {
+    index: true,
+    follow: true
   }
 };
 
