@@ -45,6 +45,7 @@ async function fetchOembedFallback(videoId) {
 
 function fallbackResponse(videoId, fallback, reason) {
   const thumbs = thumbnailSet(videoId);
+  const safeReason = String(reason || "blocked").replace(/[^\x20-\x7E]/g, "").slice(0, 180);
   return NextResponse.json({
     videoId,
     title: fallback?.title || "YouTube video",
@@ -56,9 +57,10 @@ function fallbackResponse(videoId, fallback, reason) {
     cloudinaryUrl: "",
     cloudinaryStatus: hasCloudinaryConfig() ? "configured" : "missing-config",
     limited: true,
+    blockReason: safeReason,
     note:
       "YouTube blocked direct stream extraction from this serverless request, so yt1s.video loaded public metadata and thumbnails only. Try a different public video or use thumbnail tools; full video extraction may require cookies/proxy or a dedicated worker."
-  }, { status: 200, headers: { "x-yt1s-fallback-reason": String(reason || "blocked") } });
+  }, { status: 200 });
 }
 
 export async function POST(req) {
