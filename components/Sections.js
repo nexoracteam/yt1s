@@ -11,14 +11,14 @@ export function HowItWorks() {
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="text-center">
         <p className="font-black uppercase tracking-[0.3em] text-flame">How it works</p>
-        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink">From URL to results in seconds</h2>
+        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink dark:text-white">From URL to results in seconds</h2>
       </div>
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {steps.map(([number, title, body]) => (
-          <div key={number} className="rounded-[2rem] border border-orange-100 bg-white p-8 shadow-xl shadow-orange-100/70">
+          <div key={number} className="rounded-[2rem] border border-orange-100 bg-white p-8 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
             <div className="text-5xl font-black text-orange-100">{number}</div>
-            <h3 className="mt-4 text-xl font-black text-ink">{title}</h3>
-            <p className="mt-3 text-sm leading-6 text-gray-600">{body}</p>
+            <h3 className="mt-4 text-xl font-black text-ink dark:text-white">{title}</h3>
+            <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{body}</p>
           </div>
         ))}
       </div>
@@ -31,10 +31,10 @@ export function FeatureGrid({ tool }) {
     <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {tool.features.map((feature) => (
-          <div key={feature} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70">
+          <div key={feature} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:shadow-none">
             <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-xl font-black text-flame">✓</div>
-            <h3 className="font-black text-ink">{feature}</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600">Built into the {tool.title} workflow with a fast, mobile-friendly interface.</p>
+            <h3 className="font-black text-ink dark:text-white">{feature}</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Built into the {tool.title} workflow with a fast, mobile-friendly interface.</p>
           </div>
         ))}
       </div>
@@ -47,15 +47,15 @@ export function ToolDirectory() {
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="text-center">
         <p className="font-black uppercase tracking-[0.3em] text-flame">All Tools</p>
-        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink">Everything yt1s.video includes</h2>
+        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink dark:text-white">Everything yt1s.video includes</h2>
       </div>
       <div className="mt-12 grid gap-6 lg:grid-cols-4">
         {toolCategories.map((category) => (
-          <div key={category.title} className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70">
-            <h3 className="text-xl font-black text-ink">{category.title}</h3>
+          <div key={category.title} className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+            <h3 className="text-xl font-black text-ink dark:text-white">{category.title}</h3>
             <div className="mt-5 space-y-3">
               {category.tools.map((slug) => (
-                <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-flame hover:text-white">
+                <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-flame hover:text-white dark:bg-zinc-800 dark:text-gray-200 dark:hover:bg-flame">
                   {tools[slug].title}
                   <span>→</span>
                 </Link>
@@ -98,12 +98,12 @@ export function FAQ() {
   ];
   return (
     <section className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
-      <h2 className="text-center text-4xl font-black text-ink">Frequently asked questions</h2>
+      <h2 className="text-center text-4xl font-black text-ink dark:text-white">Frequently asked questions</h2>
       <div className="mt-10 space-y-4">
         {questions.map(([q, a]) => (
-          <details key={q} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70">
-            <summary className="cursor-pointer font-black text-ink">{q}</summary>
-            <p className="mt-3 text-sm leading-6 text-gray-600">{a}</p>
+          <details key={q} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:shadow-none">
+            <summary className="cursor-pointer font-black text-ink dark:text-white">{q}</summary>
+            <p className="mt-3 text-sm leading-6 text-gray-600 dark:text-gray-300">{a}</p>
           </details>
         ))}
       </div>

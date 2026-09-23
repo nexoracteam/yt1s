@@ -71,14 +71,14 @@ function GeneratorResults({ tool, input }) {
 
   const output = items.join(tool.title.includes("Tag") ? ", " : "\n\n");
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70">
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="text-lg font-black text-ink">Generated Output</h3>
+        <h3 className="text-lg font-black text-ink dark:text-white">Generated Output</h3>
         <CopyButton text={output} />
       </div>
       <div className="space-y-3">
         {items.map((item) => (
-          <div key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-800 whitespace-pre-line">{item}</div>
+          <div key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-800 whitespace-pre-line dark:bg-zinc-800 dark:text-gray-100">{item}</div>
         ))}
       </div>
     </div>
@@ -91,11 +91,11 @@ function ThumbnailResults({ input }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {thumbnailSet(videoId).map((thumb) => (
-        <div key={thumb.url} className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/70">
+        <div key={thumb.url} className="overflow-hidden rounded-3xl border border-orange-100 bg-white shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
           <img src={thumb.url} alt={thumb.label} className="aspect-video w-full bg-orange-50 object-cover" />
           <div className="p-4">
-            <div className="font-black text-ink">{thumb.label}</div>
-            <div className="text-sm text-gray-500">{thumb.quality}</div>
+            <div className="font-black text-ink dark:text-white">{thumb.label}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">{thumb.quality}</div>
             <div className="mt-4 flex gap-2">
               <a href={thumb.url} target="_blank" rel="noreferrer" className="rounded-full bg-flame px-4 py-2 text-sm font-bold text-white">Open</a>
               <a href={thumb.url} download className="rounded-full border border-orange-200 px-4 py-2 text-sm font-bold text-ink">Download</a>
@@ -121,7 +121,7 @@ function EngagementResults({ input }) {
 }
 
 function Metric({ label, value }) {
-  return <div className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70"><div className="text-sm text-gray-500">{label}</div><div className="mt-2 text-3xl font-black text-ink">{value}</div></div>;
+  return <div className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:shadow-none"><div className="text-sm text-gray-500 dark:text-gray-400">{label}</div><div className="mt-2 text-3xl font-black text-ink dark:text-white">{value}</div></div>;
 }
 
 function TimestampResults({ input, time }) {
@@ -129,8 +129,8 @@ function TimestampResults({ input, time }) {
   const url = timestampUrl(input, seconds);
   if (!url) return null;
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70">
-      <div className="text-sm font-bold text-gray-500">Timestamp Link</div>
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
+      <div className="text-sm font-bold text-gray-500 dark:text-gray-400">Timestamp Link</div>
       <a href={url} target="_blank" rel="noreferrer" className="mt-2 block break-all text-lg font-black text-flame">{url}</a>
       <div className="mt-4"><CopyButton text={url} /></div>
     </div>
@@ -140,22 +140,22 @@ function TimestampResults({ input, time }) {
 function DownloadResults({ result }) {
   if (!result) return null;
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70">
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
       <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
         {result.thumbnail && <img src={result.thumbnail} alt="Video thumbnail" className="aspect-video w-full rounded-2xl object-cover" />}
         <div>
-          <h3 className="text-xl font-black text-ink">{result.title || "Video result"}</h3>
-          <p className="mt-2 text-sm text-gray-600">{result.note}</p>
+          <h3 className="text-xl font-black text-ink dark:text-white">{result.title || "Video result"}</h3>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">{result.note}</p>
           {result.cloudinaryUrl && <a href={result.cloudinaryUrl} className="mt-4 inline-flex rounded-full bg-flame px-5 py-3 text-sm font-black text-white">Download from Cloudinary</a>}
         </div>
       </div>
       {result.formats?.length > 0 && (
         <div className="mt-6 grid gap-3">
           {result.formats.map((format) => (
-            <div key={`${format.itag || format.formatId}-${format.url || format.mimeType}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-orange-50 p-4">
+            <div key={`${format.itag || format.formatId}-${format.url || format.mimeType}`} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-orange-50 p-4 dark:bg-zinc-800">
               <div>
-                <div className="font-black text-ink">{format.qualityLabel || format.audioQuality || format.quality || "Format"} {format.container ? `.${format.container}` : ""}</div>
-                <div className="text-xs text-gray-500">{format.hasVideo ? "video" : ""} {format.hasAudio ? "audio" : ""} {format.contentLength ? ` · ${(Number(format.contentLength) / 1024 / 1024).toFixed(1)} MB` : ""}</div>
+                <div className="font-black text-ink dark:text-white">{format.qualityLabel || format.audioQuality || format.quality || "Format"} {format.container ? `.${format.container}` : ""}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{format.hasVideo ? "video" : ""} {format.hasAudio ? "audio" : ""} {format.contentLength ? ` · ${(Number(format.contentLength) / 1024 / 1024).toFixed(1)} MB` : ""}</div>
               </div>
               {format.url && <a href={format.url} target="_blank" rel="noreferrer" className="rounded-full bg-ink px-4 py-2 text-sm font-bold text-white">Open Stream</a>}
             </div>
@@ -201,9 +201,9 @@ export default function ToolClient({ tool }) {
 
   return (
     <section className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-      <form onSubmit={submit} className="rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 sm:flex">
-        <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className="min-h-14 flex-1 rounded-3xl px-5 outline-none" required />
-        {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl px-5 outline-none sm:w-44" required />}
+      <form onSubmit={submit} className="rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:flex">
+        <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className="min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white" required />
+        {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white sm:w-44" required />}
         <button disabled={loading} className="min-h-14 rounded-3xl bg-gradient-to-r from-flame to-ember px-8 font-black text-white shadow-glow disabled:opacity-60">
           {loading ? "Working..." : tool.action}
         </button>

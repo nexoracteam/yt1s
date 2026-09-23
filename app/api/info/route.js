@@ -30,6 +30,37 @@ function selectCloudinaryCandidate(formats) {
     .sort((a, b) => Number(b.contentLength || 0) - Number(a.contentLength || 0))[0];
 }
 
+async function fetchOembedFallback(videoId) {
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 yt1s.video metadata fallback"
+    },
+    next: { revalidate: 3600 }
+  });
+
+  if (!response.ok) throw new Error("YouTube metadata fallback failed.");
+  return response.json();
+}
+
+function fallbackResponse(videoId, fallback, reason) {
+  const thumbs = thumbnailSet(videoId);
+  return NextResponse.json({
+    videoId,
+    title: fallback?.title || "YouTube video",
+    author: fallback?.author_name || "YouTube creator",
+    duration: 0,
+    thumbnail: fallback?.thumbnail_url || thumbs[0].url,
+    thumbnails: thumbs,
+    formats: [],
+    cloudinaryUrl: "",
+    cloudinaryStatus: hasCloudinaryConfig() ? "configured" : "missing-config",
+    limited: true,
+    note:
+      "YouTube blocked direct stream extraction from this serverless request, so yt1s.video loaded public metadata and thumbnails only. Try a different public video or use thumbnail tools; full video extraction may require cookies/proxy or a dedicated worker."
+  }, { status: 200, headers: { "x-yt1s-fallback-reason": String(reason || "blocked") } });
+}
+
 export async function POST(req) {
   try {
     const { url, store = false } = await req.json();
@@ -44,7 +75,22 @@ export async function POST(req) {
     }
 
     const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const info = await ytdl.getInfo(watchUrl, { requestOptions: { maxRedirects: 5 } });
+    let info;
+    try {
+      info = await ytdl.getInfo(watchUrl, {
+        requestOptions: {
+          maxRedirects: 5,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+          }
+        }
+      });
+    } catch (error) {
+      const fallback = await fetchOembedFallback(videoId);
+      return fallbackResponse(videoId, fallback, error.message);
+    }
     const details = info.videoDetails;
     const formats = info.formats
       .filter((format) => format.url && (format.hasVideo || format.hasAudio))

@@ -3,10 +3,10 @@ import { brand, toolCategories, tools } from "../lib/tools";
 
 export default function Footer() {
   return (
-    <footer className="border-t border-orange-100 bg-ink text-white">
+    <footer className="border-t border-orange-100 bg-ink text-white dark:border-white/10 dark:bg-black">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.3fr_2fr] lg:px-8">
         <div>
-          <div className="text-2xl font-black">{brand.name}</div>
+          <div className="font-display text-2xl font-black">{brand.name}</div>
           <p className="mt-4 max-w-md text-sm leading-6 text-gray-300">{brand.description}</p>
           <p className="mt-6 text-xs text-gray-400">Use these tools only for content you own or are allowed to process.</p>
         </div>

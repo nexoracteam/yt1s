@@ -5,6 +5,17 @@
 :root {
   --background: #fff7ed;
   --foreground: #111827;
+  --surface: #ffffff;
+  --muted: #4b5563;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #f8fafc;
+    --surface: #111117;
+    --muted: #cbd5e1;
+  }
 }
 
 html {
@@ -14,9 +25,14 @@ html {
 body {
   color: var(--foreground);
   background:
-    radial-gradient(circle at top left, rgba(255, 107, 53, 0.18), transparent 32rem),
-    linear-gradient(180deg, #fff7ed 0%, #ffffff 42%, #fff7ed 100%);
-  font-family: Arial, Helvetica, sans-serif;
+    radial-gradient(circle at top left, rgba(255, 107, 53, 0.2), transparent 32rem),
+    radial-gradient(circle at bottom right, rgba(255, 59, 48, 0.12), transparent 30rem),
+    var(--background);
+  font-family: var(--font-manrope), Arial, Helvetica, sans-serif;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-space), var(--font-manrope), Arial, Helvetica, sans-serif;
 }
 
 button, input, textarea, select {
