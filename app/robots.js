@@ -1,3 +1,5 @@
+import { siteUrl } from "../lib/seo";
+
 export default function robots() {
   return {
     rules: [
@@ -7,7 +9,6 @@ export default function robots() {
         disallow: ["/api/"]
       }
     ],
-    sitemap: "https://yt1s.video/sitemap.xml",
-    host: "https://yt1s.video"
+    sitemap: `${siteUrl}/sitemap.xml`
   };
 }
