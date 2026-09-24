@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { brand, toolCategories, tools } from "../lib/tools";
+import { brand, seoKeywords, toolCategories, tools } from "../lib/tools";
 
 export default function Footer() {
   return (
@@ -8,7 +8,9 @@ export default function Footer() {
         <div>
           <div className="font-display text-2xl font-black">{brand.name}</div>
           <p className="mt-4 max-w-md text-sm leading-6 text-gray-300">{brand.description}</p>
+          <p className="mt-4 text-sm text-gray-300"><a href={`mailto:${brand.email}`} className="hover:text-white">{brand.email}</a></p>
           <p className="mt-6 text-xs text-gray-400">Use these tools only for content you own or are allowed to process.</p>
+          <p className="mt-4 max-w-md text-xs leading-6 text-gray-500">Popular searches: {seoKeywords.slice(0, 5).join(", ")}.</p>
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {toolCategories.map((category) => (
@@ -26,7 +28,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-white/10 px-4 py-5 text-center text-xs text-gray-400">
-        © 2026 {brand.name}. <Link href="/privacy" className="hover:text-white">Privacy</Link> · <Link href="/terms" className="hover:text-white">Terms</Link> · <Link href="/dmca" className="hover:text-white">DMCA</Link> · <Link href="/contact" className="hover:text-white">Contact</Link>
+        © 2026 {brand.name}. <Link href="/privacy" className="hover:text-white">Privacy Policy</Link> · <Link href="/terms" className="hover:text-white">Terms</Link> · <Link href="/dmca" className="hover:text-white">DMCA</Link> · <Link href="/contact" className="hover:text-white">Contact</Link>
       </div>
     </footer>
   );

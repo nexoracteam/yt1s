@@ -1,19 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, BadgeCheck, Clock3, DownloadCloud, Layers3, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, BadgeCheck, DownloadCloud, Layers3, ShieldCheck, Zap } from "lucide-react";
 import { toolCategories, tools } from "../lib/tools";
 import Reveal from "./Reveal";
 
 export function HowItWorks() {
   const steps = [
     ["01", "Paste a URL", "Drop in a public YouTube video, Short, channel, playlist, or creator topic."],
-    ["02", "Pick Your Format", "Choose video quality, audio, thumbnail size, or the creator tool you want to use."],
-    ["03", "Save the Result", "Download the processed file, copy metadata, or use the generated creator asset instantly."]
+    ["02", "Pick Your Format", "Choose 360p, 480p, 720p, 1080p, audio, thumbnails or creator tools."],
+    ["03", "Save the Result", "Open the direct stream download, copy metadata, or use the generated creator asset instantly."]
   ];
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="text-center">
         <p className="font-black uppercase tracking-[0.3em] text-flame">How it works</p>
-        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink dark:text-white">From URL to results in seconds</h2>
+        <h2 className="mt-3 text-4xl font-black tracking-tight text-ink dark:text-white">From URL to download-ready links</h2>
       </div>
       <div className="mt-12 grid gap-6 md:grid-cols-3">
         {steps.map(([number, title, body]) => (
@@ -72,8 +72,8 @@ export function ToolDirectory() {
 
 export function Pricing() {
   const plans = [
-    ["Fast", "Instant", "Paste a link and get previews, thumbnails, formats, and creator-ready outputs without clutter."],
-    ["Secure", "Cloud", "Processed downloads are delivered through secure cloud links with no public account required."],
+    ["Fast", "Direct", "Paste a link and prepare public video, Shorts, full HD and audio downloads without clutter."],
+    ["Secure", "Stream", "Prepared links stream to your device with no account required and no video file kept on local server disk."],
     ["Creator", "Toolkit", "Use downloader, SEO, thumbnails, timestamps, and analytics tools from one polished workspace."]
   ];
   return (
@@ -95,7 +95,9 @@ export function Pricing() {
 export function FAQ() {
   const questions = [
     ["Is yt1s.video free to use?", "Yes. Core downloader, thumbnail, timestamp, and creator tools are available without account signup."],
-    ["Which formats are supported?", "Supported public videos can be processed into MP4 video or audio-ready files depending on source availability."],
+    ["Which formats are supported?", "Supported public videos can be prepared as MP4 video or M4A audio, with available quality depending on the source."],
+    ["Can I use this as a YouTube Shorts downloader?", "Yes. Paste a public Shorts URL and choose a video or audio format when source delivery is available."],
+    ["Is this a youtube video downloader no ads workflow?", "The main downloader flow stays clean and focused. Ad placeholders are reserved outside the form area."],
     ["Can I download thumbnails?", "Yes. MaxRes, standard, high, medium, and default YouTube thumbnail sizes are available instantly."],
     ["What content can I download?", "Only download content you own, have permission to use, or are legally allowed to access." ]
   ];

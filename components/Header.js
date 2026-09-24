@@ -9,7 +9,7 @@ export default function Header() {
           <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-flame to-ember font-black text-white shadow-glow">Y</span>
           <span>
             <span className="block font-display text-lg font-black tracking-tight text-ink dark:text-white">{brand.name}</span>
-            <span className="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">YouTube tools, no clutter</span>
+            <span className="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">YT downloader, no clutter</span>
           </span>
         </Link>
         <nav className="hidden items-center gap-6 text-sm font-semibold text-gray-700 dark:text-gray-300 lg:flex">
@@ -18,7 +18,7 @@ export default function Header() {
               {category.title}
             </Link>
           ))}
-          <Link href="/#pricing" className="hover:text-flame">Pricing</Link>
+          <Link href="/youtube-shorts-downloader" className="hover:text-flame">Shorts</Link>
           <Link href="/blog" className="hover:text-flame">Blog</Link>
         </nav>
         <Link href="/youtube-video-downloader" className="rounded-full bg-ink px-5 py-2 text-sm font-bold text-white shadow-lg shadow-gray-300 transition hover:bg-flame dark:bg-white dark:text-ink dark:shadow-none dark:hover:bg-flame dark:hover:text-white">

@@ -22,6 +22,10 @@ html {
   scroll-behavior: smooth;
 }
 
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   color: var(--foreground);
   background:
@@ -37,4 +41,31 @@ h1, h2, h3, .font-display {
 
 button, input, textarea, select {
   font: inherit;
+}
+
+button, a, input, select, textarea {
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, opacity 180ms ease;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid rgba(255, 59, 48, 0.45);
+  outline-offset: 3px;
+}
+
+progress {
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
