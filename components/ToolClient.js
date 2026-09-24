@@ -2,15 +2,29 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Clipboard, Download, Eye, Film, ImageDown, Loader2, Music2, Play, ShieldCheck, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clipboard, Download, Eye, Film, ImageDown, Loader2, Music2, RotateCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { extractVideoId, thumbnailSet, timestampUrl, toTimestampSeconds } from "../lib/youtube";
+import { DownloadError, safeDownloadMessage } from "../worker/download-errors";
 
 function directDownloadUrl(url) {
-  if (!url || !url.includes("res.cloudinary.com") || url.includes("/fl_attachment/")) return url;
-  return url.replace("/upload/", "/upload/fl_attachment/");
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return "";
+    return url.includes("/fl_attachment/") ? url : url.replace("/upload/", "/upload/fl_attachment/");
+  } catch { return ""; }
 }
+
+const statusLabels = {
+  queued: "Your download is in the queue…",
+  checking: "Finding the best available format…",
+  retrying: "Reconnecting automatically. Please keep this page open…",
+  downloading: "Preparing your video…",
+  uploading: "Finishing your download…",
+  completed: "Your file is ready. Saving to your device.",
+  failed: "Download couldn't be completed."
+};
 
 function CopyButton({ text, label = "Copy" }) {
   const [copied, setCopied] = useState(false);
@@ -154,7 +168,8 @@ function DownloadResults({ result }) {
         {result.thumbnail && <img src={result.thumbnail} alt="Video thumbnail" className="aspect-video w-full rounded-2xl object-cover" />}
         <div>
           <h3 className="line-clamp-2 text-xl font-black text-white">{result.title || "Video result"}</h3>
-          <p className="mt-2 text-sm text-gray-400">{result.note || "Your file is ready. Click download to save it directly to your device."}</p>
+          <p className="mt-2 text-sm text-gray-400">{result.note || (fileUrl ? "Your file is ready. If it hasn't started saving, use Download File below." : statusLabels[result.status] || "Video preview")}</p>
+          {result.actualQuality && <p className="mt-2 text-sm font-bold text-red-300">{result.actualQuality === "audio" ? "M4A audio" : `${result.actualQuality} MP4`}{result.bytes ? ` · ${(result.bytes / 1024 / 1024).toFixed(1)} MB` : ""}</p>}
           <div className="mt-4 flex flex-wrap gap-3">
             {watchUrl && <a href={watchUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full text-sm font-black text-red-400"><Eye className="h-4 w-4" />Watch Preview</a>}
             {result.thumbnail && <a href={result.thumbnail} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm font-black text-white"><ImageDown className="h-4 w-4" />Open Thumbnail</a>}
@@ -187,23 +202,86 @@ function DownloadResults({ result }) {
 export default function ToolClient({ tool }) {
   const [input, setInput] = useState("");
   const [time, setTime] = useState("");
-  const [quality, setQuality] = useState("720p");
+  const [quality, setQuality] = useState(tool.title.includes("MP3") ? "audio" : "720p");
   const [job, setJob] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [downloadResult, setDownloadResult] = useState(null);
+  const controllerRef = useRef(null);
+  const [resumeId, setResumeId] = useState("");
 
-  async function poll(jobId) {
-    for (let index = 0; index < 120; index += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      const response = await fetch(`/api/worker-download?jobId=${encodeURIComponent(jobId)}`);
-      const data = await response.json();
-      setJob(data);
-      if (data.title || data.thumbnail || data.downloadUrl) setDownloadResult(data);
-      if (["completed", "failed"].includes(data.status)) return data;
+  useEffect(() => () => controllerRef.current?.abort(), []);
+
+  async function request(url, options, signal) {
+    const response = await fetch(url, { ...options, signal, cache: "no-store" });
+    const data = await response.json().catch(() => { throw new DownloadError("SERVICE_BUSY"); });
+    if (!response.ok) {
+      const error = new Error(safeDownloadMessage(data, "SERVICE_BUSY"));
+      error.status = response.status;
+      throw error;
     }
-    throw new Error("Download is still processing. Check again later.");
+    return data;
+  }
+
+  async function poll(jobId, signal) {
+    let failures = 0;
+    for (let index = 0; index < 600; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      signal.throwIfAborted();
+      try {
+        const data = await request(`/api/worker-download?jobId=${encodeURIComponent(jobId)}`, {}, signal);
+        if (!data.status) throw new DownloadError("SERVICE_BUSY");
+        failures = 0;
+        setJob(data);
+        if (data.title || data.thumbnail || data.downloadUrl) setDownloadResult(data);
+        if (["completed", "failed"].includes(data.status)) return data;
+      } catch (error) {
+        if (signal.aborted) throw error;
+        if ([400, 404].includes(error.status)) { setResumeId(""); throw error; }
+        failures += 1;
+        if (failures >= 4) throw error;
+      }
+    }
+    throw new DownloadError("TIMEOUT");
+  }
+
+  async function download(existingId = "") {
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setLoading(true);
+    setError("");
+    try {
+      let start = { jobId: existingId };
+      if (!existingId) {
+        setResumeId("");
+        start = await request("/api/worker-download", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: input, quality })
+        }, controller.signal);
+      }
+      if (!start.jobId) throw new DownloadError("SERVICE_BUSY");
+      setResumeId(start.jobId);
+      setJob(start);
+      const result = start.status === "completed" ? start : await poll(start.jobId, controller.signal);
+      setResumeId("");
+      if (result.status === "failed") throw new Error(safeDownloadMessage(result));
+      setDownloadResult(result);
+      setJob(result);
+      const url = directDownloadUrl(result.downloadUrl);
+      if (!url) throw new DownloadError("DELIVERY_UNAVAILABLE");
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      if (!controller.signal.aborted) setError(safeDownloadMessage(error));
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }
 
   async function submit(event) {
@@ -214,24 +292,8 @@ export default function ToolClient({ tool }) {
     setDownloadResult(null);
 
     if (tool.mode === "download") {
-      setLoading(true);
-      try {
-        const response = await fetch("/api/worker-download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: input, quality })
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Could not start download.");
-        setJob(data);
-        const finalJob = await poll(data.jobId);
-        if (finalJob.status === "failed") throw new Error(finalJob.error || "Download failed.");
-        setDownloadResult(finalJob);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+      if (!extractVideoId(input)) { setError(safeDownloadMessage({ code: "INVALID_URL" })); return; }
+      await download();
     } else if (tool.mode === "metadata") {
       setLoading(true);
       try {
@@ -243,8 +305,8 @@ export default function ToolClient({ tool }) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Request failed");
         setDownloadResult(data);
-      } catch (err) {
-        setError(err.message);
+      } catch {
+        setError("Unable to preview this video right now. Please try another public video.");
       } finally {
         setLoading(false);
       }
@@ -255,22 +317,17 @@ export default function ToolClient({ tool }) {
 
   return (
     <section className={isDownload ? "mx-auto max-w-5xl px-4 sm:px-6 lg:px-8" : "mx-auto max-w-4xl px-4 sm:px-6 lg:px-8"}>
-      {isDownload && (
-        <div className="mx-auto mb-8 max-w-4xl text-center">
-          <h2 className="text-4xl font-black tracking-tight text-white sm:text-6xl">Your Next Winning Script</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-gray-300 sm:text-lg">Paste any YouTube URL. Download HD/4K video or audio with clean cloud delivery.</p>
-        </div>
-      )}
       <form onSubmit={submit} className={isDownload ? "mx-auto rounded-[1.35rem] border border-white/15 bg-[#1c171b] p-2 shadow-2xl shadow-red-950/25 sm:flex sm:max-w-4xl" : "rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:flex"}>
-        <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className={isDownload ? "min-h-14 flex-1 rounded-2xl bg-transparent px-5 text-sm font-semibold text-white outline-none placeholder:text-gray-500" : "min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white"} required />
-        {input && isDownload && <button type="button" onClick={() => setInput("")} className="hidden px-2 text-gray-500 hover:text-white sm:block"><X className="h-4 w-4" /></button>}
+        <input aria-label="YouTube video link" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className={isDownload ? "min-h-14 w-full min-w-0 flex-1 rounded-2xl bg-transparent px-5 text-sm font-semibold text-white outline-none placeholder:text-gray-500" : "min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white"} required />
+        {isDownload && <button type="button" disabled={loading} onClick={async () => { try { setInput(await navigator.clipboard.readText()); } catch { setError("Please paste the link into the input field."); } }} className="px-3 text-xs font-bold text-gray-300"><Clipboard className="mr-1 inline h-3 w-3" />Paste</button>}
+        {input && isDownload && <button type="button" aria-label="Clear link" disabled={loading} onClick={() => { setInput(""); setDownloadResult(null); setJob(null); setError(""); setResumeId(""); }} className="px-2 text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>}
         {isDownload && (
-          <select value={quality} onChange={(event) => setQuality(event.target.value)} className="min-h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm font-black text-white outline-none sm:mx-2">
+          <select aria-label="Download quality" disabled={loading} value={quality} onChange={(event) => setQuality(event.target.value)} className="min-h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm font-black text-white outline-none sm:mx-2">
             <option className="bg-zinc-900" value="360p">360p</option>
             <option className="bg-zinc-900" value="480p">480p</option>
             <option className="bg-zinc-900" value="720p">720p HD</option>
             <option className="bg-zinc-900" value="1080p">1080p</option>
-            <option className="bg-zinc-900" value="audio">Audio</option>
+            <option className="bg-zinc-900" value="audio">Audio M4A</option>
           </select>
         )}
         {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white sm:w-44" required />}
@@ -278,9 +335,9 @@ export default function ToolClient({ tool }) {
           {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing...</span> : <span className="inline-flex items-center gap-2">{isDownload ? <Download className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}{isDownload ? "Download Now" : tool.action}</span>}
         </button>
       </form>
-      <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-400" />}100% Direct Cloud Stream — No local server disk storage used</p>
-      {job && isDownload && <div className="mx-auto mt-6 max-w-4xl rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-gray-200"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <Loader2 className="h-4 w-4 animate-spin text-red-400" />} Status: {job.status}</span></div>}
-      {error && <div className="mt-8 rounded-3xl border border-red-200 bg-red-50 p-5 text-red-700">{error}</div>}
+      <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-500 dark:text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-500" />}{isDownload ? "Direct file download · Automatic retries · No sign-up" : "Fast preview · Simple creator tools"}</p>
+      {job && isDownload && <div role="status" aria-live="polite" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : job.status === "failed" || error ? <AlertCircle className="h-4 w-4 text-amber-500" /> : <Loader2 className="h-4 w-4 animate-spin text-red-400" />}{error ? "Download paused. You can retry below." : statusLabels[job.status] || "Checking your download…"}</span>{job.status === "downloading" && Number.isFinite(job.progress) && <div className="mt-3"><progress aria-label="Download progress" value={job.progress} max="100" className="h-2 w-full accent-red-500" /><span>{job.progress}%</span></div>}</div>}
+      {error && <div role="alert" className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900"><p>{error}</p>{isDownload && <button type="button" disabled={loading} onClick={resumeId ? () => download(resumeId) : submit} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resumeId ? "Check download status" : "Try again"}</button>}</div>}
       <div className="mt-10">
         {submitted && tool.mode === "thumbnail" && <ThumbnailResults input={input} />}
         {submitted && tool.mode === "generator" && <GeneratorResults tool={tool} input={input} />}

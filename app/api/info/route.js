@@ -43,9 +43,8 @@ async function fetchOembedFallback(videoId) {
   return response.json();
 }
 
-function fallbackResponse(videoId, fallback, reason) {
+function fallbackResponse(videoId, fallback) {
   const thumbs = thumbnailSet(videoId);
-  const safeReason = String(reason || "blocked").replace(/[^\x20-\x7E]/g, "").slice(0, 180);
   return NextResponse.json({
     videoId,
     title: fallback?.title || "YouTube video",
@@ -57,7 +56,6 @@ function fallbackResponse(videoId, fallback, reason) {
     cloudinaryUrl: "",
     cloudinaryStatus: hasCloudinaryConfig() ? "configured" : "missing-config",
     limited: true,
-    blockReason: safeReason,
     note:
       "Preview and thumbnails are ready. If instant formats are unavailable, use the secure download processor to create a downloadable file."
   }, { status: 200 });
@@ -89,9 +87,9 @@ export async function POST(req) {
           }
         }
       });
-    } catch (error) {
+    } catch {
       const fallback = await fetchOembedFallback(videoId);
-      return fallbackResponse(videoId, fallback, error.message);
+      return fallbackResponse(videoId, fallback);
     }
     const details = info.videoDetails;
     const formats = info.formats
@@ -108,8 +106,8 @@ export async function POST(req) {
         const upload = await uploadRemoteMedia(candidate.url, `${videoId}-${candidate.itag}`);
         cloudinaryUrl = upload.secure_url;
         cloudinaryStatus = "uploaded";
-      } catch (error) {
-        cloudinaryStatus = `upload-failed: ${error.message}`;
+      } catch {
+        cloudinaryStatus = "unavailable";
       }
     }
 
@@ -127,9 +125,9 @@ export async function POST(req) {
         ? "Your file is ready for download."
         : "Preview formats are shown below. Use the secure download processor for a final downloadable file."
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
-      { error: `Unable to fetch this video right now. ${error.message || "Try another public video."}` },
+      { error: "Unable to preview this video right now. Please try another public video." },
       { status: 500 }
     );
   }

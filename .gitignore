@@ -7,5 +7,6 @@ dist/
 *.log
 youtube-cookies.txt
 *cookies*.txt
+worker/downloads/
 .vercel/
 .vercel

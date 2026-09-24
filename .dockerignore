@@ -6,3 +6,6 @@ node_modules
 npm-debug.log
 worker/node_modules
 worker/downloads
+**/*cookies*.txt
+**/.env*
+.git

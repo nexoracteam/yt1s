@@ -1,5 +1,21 @@
 # yt1s.video Project Handoff
 
+## September 24 recovery update (supersedes older download notes below)
+
+- Current managed frontend: https://yt1s-iota.vercel.app, Vercel project `yt1s` in `nexora-team4`.
+- The older `yt1s-azure.vercel.app` frontend is not in the currently authenticated Vercel scope. It still uses the same Railway worker.
+- Railway worker health version: `download-recovery-v2`.
+- Public downloads try maintained yt-dlp default clients anonymously, then a cookie session, with bounded retries. No hard-coded browser client/user-agent.
+- Cookie snapshots are isolated per job; refreshed cookies survive between jobs within a running container. Environment cookies seed the store on startup. No cookie values are logged.
+- Jobs are serialized; identical in-flight requests are deduplicated and completed results cached for one hour in memory. Restarting the worker clears this cache.
+- Extraction JSON is reused for the download with the requested format selector. MP4 remux / M4A extraction makes the final extension predictable.
+- Cloudinary attachment URLs trigger automatic browser download, with a manual Download File fallback.
+- Worker, proxy and UI use allowlisted public errors; internal instructions and subprocess errors are never shown to users. UI supports retry/status recovery and download progress.
+- Docker pins `yt-dlp[default]==2026.8.19` to include its JS challenge solver. Review/update the pin when extractor changes are needed.
+- Verification: `node --test worker/download.test.js`, lint and build passed. Headless Chrome mobile checks passed, including hiding a simulated legacy internal error and a real automatic download.
+- Live tests: `RpJ4UWDjyeU` 360p completed on retry 2 in ~22s (52,245,799 bytes); `dQw4w9WgXcQ` 360p completed in ~9.5s, cached response ~1.2s. These are observed tests, not guaranteed timings or permanent immunity to YouTube throttling.
+- A valid cookie-file format does not prove a valid YouTube login session. Diagnostic command `node scripts/cookie-status.mjs` prints only counts/booleans.
+
 ## Current Production URLs
 
 - Frontend: https://yt1s-azure.vercel.app
