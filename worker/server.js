@@ -1,41 +1,26 @@
 import express from "express";
-import { mkdir, writeFile, rm, stat } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
-import { v2 as cloudinary } from "cloudinary";
 import { DownloadError, failureCode, publicFailure } from "./download-errors.js";
-import { QUALITIES, createCookieStore, directDownloadUrl, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
+import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
+import { streamArgs, streamMedia } from "./stream-download.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE"]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function uploadFile(filePath, publicId) {
-  if (!process.env.CLOUDINARY_URL) throw new DownloadError("DELIVERY_UNAVAILABLE");
-  cloudinary.config({ secure: true });
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_chunked(filePath, {
-      resource_type: "video", folder: "yt1s-video/downloads", public_id: publicId,
-      overwrite: true, chunk_size: 6 * 1024 * 1024, timeout: 120000
-    }, (error, result) => {
-      if (error) {
-        console.error(JSON.stringify({ event: "upload_failed", status: error.http_code || 0, reason: String(error.message || "").replace(/https?:\/\/\S+/g, "[url]").slice(0, 200) }));
-        reject(new DownloadError("DELIVERY_UNAVAILABLE"));
-      }
-      else if (result?.done !== false && result?.secure_url) resolve(result);
-    });
-  });
-}
-
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, upload = uploadFile, wait = sleep, log = console.log } = {}) {
+  run = runCommand, stream = streamMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
   const maxBytes = Number(env.MAX_FILE_MB || 500) * 1024 * 1024;
-  const ttlMs = 60 * 60 * 1000;
+  const ttlMs = 10 * 60 * 1000;
   const jobs = new Map();
+  const sources = new Map();
+  let activeStreams = 0;
   const byVideo = new Map();
   const queue = [];
   let active = false;
@@ -54,6 +39,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     for (const [id, job] of jobs) {
       if (["completed", "failed"].includes(job.status) && Date.now() - Date.parse(job.completedAt || job.failedAt) > ttlMs) {
         jobs.delete(id);
+        sources.delete(id);
         const key = `${job.videoId}:${job.quality}`;
         if (byVideo.get(key) === id) byVideo.delete(key);
       }
@@ -63,12 +49,11 @@ export async function createWorker({ env = process.env, directory = path.join(__
   async function processJob(job) {
     const jobDir = path.join(directory, job.id);
     const url = `https://www.youtube.com/watch?v=${job.videoId}`;
-    const ext = job.quality === "audio" ? "m4a" : "mp4";
     const startedAt = Date.now();
     try {
       // Anonymous first: a stale login session must not break public video downloads.
       const strategies = cookies.available ? ["anonymous", "cookies", "anonymous"] : ["anonymous", "anonymous"];
-      let filePath;
+      let selectedInfo;
       for (let attempt = 0; attempt < strategies.length; attempt++) {
         await mkdir(jobDir, { recursive: true });
         let cookiePath;
@@ -86,28 +71,11 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.thumbnail = info.thumbnail;
           job.duration = Number(info.duration || 0);
           job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
-          job.status = "downloading";
-          job.progress = 0;
-          const infoPath = path.join(jobDir, "info.json");
-          await writeFile(infoPath, JSON.stringify(info), { mode: 0o600 });
-          // Reuse extraction: no duplicate player/challenge request when starting the download.
-          const downloadArgs = [...args, "--load-info-json", infoPath, "-f", formatSelector(job.quality), "--no-simulate", "--concurrent-fragments", "4",
-            "--max-filesize", String(maxBytes), "--newline", "--progress", "--progress-template", "download:__PROGRESS__%(progress._percent_str)s",
-            "-o", path.join(jobDir, "media.%(ext)s")];
-          if (job.quality === "audio") downloadArgs.push("--extract-audio", "--audio-format", "m4a");
-          else downloadArgs.push("--merge-output-format", "mp4", "--remux-video", "mp4");
-          await run("yt-dlp", downloadArgs, {
-            timeoutMs: 360000,
-            onLine(line) {
-              const match = line.match(/__PROGRESS__\s*([\d.]+)%/);
-              if (match) job.progress = Math.min(100, Math.round(Number(match[1])));
-            }
-          });
-          const candidate = path.join(jobDir, `media.${ext}`);
-          const file = await stat(candidate).catch(() => { throw new DownloadError("FILE_LIMIT"); });
-          if (!file.size || file.size > maxBytes) throw new DownloadError("FILE_LIMIT");
-          job.bytes = file.size;
-          filePath = candidate;
+          streamArgs(info, job.quality);
+          const estimate = Number(info.filesize || info.filesize_approx || 0);
+          if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
+          job.estimatedBytes = estimate;
+          selectedInfo = info;
           break;
         } catch (error) {
           const code = failureCode(error);
@@ -117,13 +85,14 @@ export async function createWorker({ env = process.env, directory = path.join(__
           await wait(1500 * (attempt + 1));
         } finally {
           if (cookiePath) await cookies.save(cookiePath).catch(() => {});
-          if (!filePath) await rm(jobDir, { recursive: true, force: true });
+          await rm(jobDir, { recursive: true, force: true });
         }
       }
-      job.status = "uploading";
-      const result = await upload(filePath, `${job.id}-${job.quality}`);
-      job.previewUrl = result.secure_url;
-      job.downloadUrl = directDownloadUrl(result.secure_url);
+      const token = nanoid(32);
+      sources.set(job.id, { info: selectedInfo, token });
+      const origin = env.PUBLIC_WORKER_URL || (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : "https://yt1s-production.up.railway.app");
+      job.downloadUrl = `${origin}/stream/${job.id}?token=${token}`;
+      job.expiresAt = new Date(Date.now() + ttlMs).toISOString();
       job.status = "completed";
       job.progress = 100;
       job.completedAt = new Date().toISOString();
@@ -145,7 +114,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
   }
 
   app.get("/health", (req, res) => res.json({
-    ok: true, app: "yt1s-video-worker", version: "download-recovery-v2",
+    ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v3",
     cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available,
     proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024
   }));
@@ -176,6 +145,19 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const job = jobs.get(req.params.id);
     if (!job) return res.status(404).json(publicFailure(new DownloadError("JOB_EXPIRED")));
     res.set("Cache-Control", "no-store").json(job);
+  });
+
+  app.get("/stream/:id", async (req, res) => {
+    prune();
+    const job = jobs.get(req.params.id);
+    const source = sources.get(req.params.id);
+    if (!job || !source || req.query.token !== source.token) return res.status(404).send("Download link expired. Please generate a fresh link.");
+    if (activeStreams >= 3) return res.status(429).send("Downloads are busy. Please try again shortly.");
+    if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
+    activeStreams++;
+    try { await stream(req, res, source.info, job.quality, { maxBytes, log }); }
+    catch { if (!res.headersSent) res.status(502).send("Please generate a fresh download link."); else res.destroy(); }
+    finally { activeStreams--; }
   });
 
   app.use((error, req, res, next) => {

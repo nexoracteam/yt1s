@@ -11,7 +11,9 @@ import { DownloadError, safeDownloadMessage } from "../worker/download-errors";
 function directDownloadUrl(url) {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:" || parsed.hostname !== "res.cloudinary.com") return "";
+    if (parsed.protocol !== "https:") return "";
+    if (parsed.hostname === "yt1s-production.up.railway.app" && parsed.pathname.startsWith("/stream/")) return url;
+    if (parsed.hostname !== "res.cloudinary.com") return "";
     return url.includes("/fl_attachment/") ? url : url.replace("/upload/", "/upload/fl_attachment/");
   } catch { return ""; }
 }
@@ -22,7 +24,7 @@ const statusLabels = {
   retrying: "Reconnecting automatically. Please keep this page open…",
   downloading: "Preparing your video…",
   uploading: "Finishing your download…",
-  completed: "Your file is ready. Saving to your device.",
+  completed: "Your download link is ready. Streaming to your device.",
   failed: "Download couldn't be completed."
 };
 
@@ -158,7 +160,7 @@ function TimestampResults({ input, time }) {
   );
 }
 
-function DownloadResults({ result }) {
+function DownloadResults({ result, onFormat, busy }) {
   if (!result) return null;
   const watchUrl = result.videoId ? `https://www.youtube.com/watch?v=${result.videoId}` : "";
   const fileUrl = directDownloadUrl(result.downloadUrl || result.cloudinaryUrl);
@@ -177,6 +179,16 @@ function DownloadResults({ result }) {
           </div>
         </div>
       </div>
+      {onFormat && <div className="mt-6 border-t border-white/10 pt-5 text-left">
+        <p className="mb-3 text-sm font-bold text-white">Video MP4 / Audio M4A</p>
+        <p className="mb-4 text-xs text-gray-400">Live delivery to your device. No video file is stored on our server. Links expire after 10 minutes.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {["1080p", "720p", "480p", "360p", "audio"].map((value) => <div key={value} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+            <span className="text-sm font-bold text-gray-200">{value === "audio" ? "Audio M4A" : `Up to ${value} MP4`}</span>
+            {result.quality === value && fileUrl ? <a href={fileUrl} download className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white">Download</a> : <button type="button" disabled={busy} onClick={() => onFormat(value)} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Get link</button>}
+          </div>)}
+        </div>
+      </div>}
       {result.formats?.length > 0 && (
         <div className="mt-6 grid gap-3">
           {result.formats.map((format) => (
@@ -246,7 +258,7 @@ export default function ToolClient({ tool }) {
     throw new DownloadError("TIMEOUT");
   }
 
-  async function download(existingId = "") {
+  async function download(existingId = "", selectedQuality = quality) {
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -258,7 +270,7 @@ export default function ToolClient({ tool }) {
         setResumeId("");
         start = await request("/api/worker-download", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: input, quality })
+          body: JSON.stringify({ url: input, quality: selectedQuality })
         }, controller.signal);
       }
       if (!start.jobId) throw new DownloadError("SERVICE_BUSY");
@@ -335,7 +347,7 @@ export default function ToolClient({ tool }) {
           {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing...</span> : <span className="inline-flex items-center gap-2">{isDownload ? <Download className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}{isDownload ? "Download Now" : tool.action}</span>}
         </button>
       </form>
-      <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-500 dark:text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-500" />}{isDownload ? "Direct file download · Automatic retries · No sign-up" : "Fast preview · Simple creator tools"}</p>
+      <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-500 dark:text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-500" />}{isDownload ? "Stream to your device · No video storage · No upload wait" : "Fast preview · Simple creator tools"}</p>
       {job && isDownload && <div role="status" aria-live="polite" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : job.status === "failed" || error ? <AlertCircle className="h-4 w-4 text-amber-500" /> : <Loader2 className="h-4 w-4 animate-spin text-red-400" />}{error ? "Download paused. You can retry below." : statusLabels[job.status] || "Checking your download…"}</span>{job.status === "downloading" && Number.isFinite(job.progress) && <div className="mt-3"><progress aria-label="Download progress" value={job.progress} max="100" className="h-2 w-full accent-red-500" /><span>{job.progress}%</span></div>}</div>}
       {error && <div role="alert" className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900"><p>{error}</p>{isDownload && <button type="button" disabled={loading} onClick={resumeId ? () => download(resumeId) : submit} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resumeId ? "Check download status" : "Try again"}</button>}</div>}
       <div className="mt-10">
@@ -343,7 +355,7 @@ export default function ToolClient({ tool }) {
         {submitted && tool.mode === "generator" && <GeneratorResults tool={tool} input={input} />}
         {submitted && tool.mode === "calculator" && <EngagementResults input={input} />}
         {submitted && tool.mode === "timestamp" && <TimestampResults input={input} time={time} />}
-        <DownloadResults result={downloadResult} />
+        <DownloadResults result={downloadResult} busy={loading} onFormat={isDownload ? (value) => { setQuality(value); void download("", value); } : undefined} />
       </div>
     </section>
   );

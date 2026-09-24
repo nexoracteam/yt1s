@@ -1,5 +1,18 @@
 # yt1s.video Project Handoff
 
+## Disk-free streaming update (supersedes delivery/cache notes below)
+
+- Root cause of the recent delivery failures: Cloudinary rejected files above its 104,857,600-byte account limit while the worker allowed 500 MB.
+- Worker now extracts metadata/selected source URLs only. It returns a 10-minute, unguessable `/stream/:id?token=...` link. No video is downloaded to disk and no Cloudinary upload occurs in this flow.
+- Clicking the link streams YouTube media through ffmpeg stdout into the HTTP response with `Content-Disposition: attachment`. Separate HD video/audio are merged into fragmented MP4 in flight. This is a live worker relay, not a raw YouTube URL (source URLs may depend on server IP).
+- Only cookie files use local disk. Video URLs remain in worker memory; restart expires all prepared links. Preparation cache TTL is 10 minutes, replacing the old completed-file cache.
+- Stream concurrency is limited to three; client disconnect stops ffmpeg. Source/first-byte timeouts and 500 MB maximum remain. No HTTP range/resume support for on-the-fly muxing.
+- Frontend on `https://yt1s-iota.vercel.app` accepts worker streaming links and shows quality rows with Get link / Download actions. Existing API routes remain compatible with the older frontend.
+- Health version: `disk-free-stream-v3`.
+- Verified 720p full transfer: link preparation ~4.8s; first response ~2.3s; valid MP4, 21,075,460 bytes. Full transfer ~109s in the test connection (not an instant-transfer claim). Chrome mobile auto-download and safe-error checks passed.
+- A separate 1080p source test encountered YouTube bot throttling during extraction. Removing Cloudinary fixes its size/upload failures, not every YouTube source restriction. No claim of universal source availability.
+- `node --test worker/download.test.js`: six passing tests, including no media download during preparation and separate-track stdout mux arguments. Lint/build passed.
+
 ## September 24 recovery update (supersedes older download notes below)
 
 - Current managed frontend: https://yt1s-iota.vercel.app, Vercel project `yt1s` in `nexora-team4`.

@@ -27,7 +27,7 @@ async function proxy(path, options = {}) {
       data.error = safeDownloadMessage(data, response.status === 404 ? "JOB_EXPIRED" : "SERVICE_BUSY");
     }
     // Do not forward unexpected diagnostics from old worker versions.
-    const fields = ["jobId", "id", "videoId", "status", "quality", "actualQuality", "title", "thumbnail", "duration", "bytes", "downloadUrl", "previewUrl", "progress", "attempt", "cached", "createdAt", "completedAt", "failedAt", "code", "error", "retryable"];
+    const fields = ["jobId", "id", "videoId", "status", "quality", "actualQuality", "title", "thumbnail", "duration", "bytes", "estimatedBytes", "expiresAt", "downloadUrl", "previewUrl", "progress", "attempt", "cached", "createdAt", "completedAt", "failedAt", "code", "error", "retryable"];
     const result = Object.fromEntries(fields.filter((key) => Object.hasOwn(data, key)).map((key) => [key, data[key]]));
     return NextResponse.json(result, { status: response.status, headers: { "Cache-Control": "no-store" } });
   } catch {
