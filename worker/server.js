@@ -112,10 +112,10 @@ function cleanError(message = "") {
 
 function formatSelector(quality) {
   if (quality === "audio") return "bestaudio[ext=m4a]/bestaudio/best";
-  if (quality === "1080p") return "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best";
-  if (quality === "720p") return "bestvideo[height<=720]+bestaudio/best[height<=720]/best";
-  if (quality === "480p") return "bestvideo[height<=480]+bestaudio/best[height<=480]/best";
-  if (quality === "360p") return "bestvideo[height<=360]+bestaudio/best[height<=360]/best";
+  if (quality === "1080p") return "best[height<=1080][ext=mp4]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best";
+  if (quality === "720p") return "best[height<=720][ext=mp4]/bestvideo[height<=720]+bestaudio/best[height<=720]/best";
+  if (quality === "480p") return "best[height<=480][ext=mp4]/bestvideo[height<=480]+bestaudio/best[height<=480]/best";
+  if (quality === "360p") return "best[height<=360][ext=mp4]/bestvideo[height<=360]+bestaudio/best[height<=360]/best";
   return "bestvideo+bestaudio/best";
 }
 
@@ -180,6 +180,8 @@ async function processJob(jobId, payload) {
       "3",
       "--fragment-retries",
       "3",
+      "--concurrent-fragments",
+      "4",
       "--restrict-filenames",
       "--merge-output-format",
       ext === "mp4" ? "mp4" : "m4a",
