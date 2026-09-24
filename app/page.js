@@ -28,7 +28,7 @@ export default function Home() {
           ))}
         </div>
       </section>
-      <AdSlot className="pb-4" />
+      <AdSlot slot="home-top-responsive" className="pb-4" />
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:p-8">
           <h2 className="text-3xl font-black tracking-tight text-ink dark:text-white">Fast yt video downloader with a no-clutter workflow</h2>
@@ -39,7 +39,7 @@ export default function Home() {
       </section>
       <HowItWorks />
       <ToolDirectory />
-      <AdSlot label="Sponsored placement" />
+      <AdSlot label="Sponsored placement" slot="home-mid-responsive" size="inArticle" />
       <Pricing />
       <FAQ />
     </main>

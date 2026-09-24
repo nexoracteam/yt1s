@@ -34,9 +34,10 @@ export default async function DynamicPage({ params }) {
 
   if (page) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-5xl px-4 py-20 sm:px-6 lg:px-8">
         <JsonLd data={{ "@context": "https://schema.org", "@type": "WebPage", name: page.title, url: absoluteUrl(slug), description: page.description, publisher: { "@type": "Organization", name: "yt1s.video" } }} />
-        <div className="rounded-[2rem] bg-white p-8 shadow-2xl shadow-orange-100/80 dark:bg-zinc-900 dark:shadow-none sm:p-12">
+        <AdSlot label="Advertisement" slot={`${slug}-top-responsive`} className="mb-10 px-0" />
+        <div className="mx-auto max-w-4xl rounded-[2rem] bg-white p-8 shadow-2xl shadow-orange-100/80 dark:bg-zinc-900 dark:shadow-none sm:p-12">
           <p className="font-black uppercase tracking-[0.3em] text-flame">yt1s.video</p>
           <h1 className="mt-4 font-display text-5xl font-black tracking-tight text-ink dark:text-white">{page.title}</h1>
           <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300">{page.description}</p>
@@ -49,6 +50,7 @@ export default async function DynamicPage({ params }) {
             ))}
           </div>
         </div>
+        <AdSlot label="Sponsored placement" slot={`${slug}-bottom-responsive`} size="inArticle" className="mt-10 px-0" />
       </main>
     );
   }
@@ -66,10 +68,10 @@ export default async function DynamicPage({ params }) {
         </div>
         <div className="mt-10"><ToolClient tool={tool} /></div>
       </section>
-      <AdSlot className="pb-4" />
+      <AdSlot slot={`${slug}-top-responsive`} className="pb-4" />
       <HowItWorks />
       <FeatureGrid tool={tool} />
-      <AdSlot label="Advertisement" />
+      <AdSlot label="Advertisement" slot={`${slug}-mid-responsive`} size="inArticle" />
       <ToolDirectory />
       <FAQ />
     </main>

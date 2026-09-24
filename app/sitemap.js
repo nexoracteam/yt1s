@@ -1,7 +1,8 @@
 import { allToolSlugs, legalPages } from "../lib/tools";
+import { siteUrl } from "../lib/seo";
 
 export default function sitemap() {
-  const base = "https://yt1s.video";
+  const base = siteUrl;
   return [
     { url: base, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
     ...allToolSlugs().map((slug) => ({

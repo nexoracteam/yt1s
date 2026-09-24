@@ -326,27 +326,44 @@ export default function ToolClient({ tool }) {
   }
 
   const isDownload = tool.mode === "download";
+  const inputPlaceholder = isDownload ? "Paste YouTube link..." : tool.placeholder;
 
   return (
     <section className={isDownload ? "mx-auto max-w-5xl px-4 sm:px-6 lg:px-8" : "mx-auto max-w-4xl px-4 sm:px-6 lg:px-8"}>
-      <form onSubmit={submit} className={isDownload ? "mx-auto rounded-[1.35rem] border border-white/15 bg-[#1c171b] p-2 shadow-2xl shadow-red-950/25 sm:flex sm:max-w-4xl" : "rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:flex"}>
-        <input aria-label="YouTube video link" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={tool.placeholder} className={isDownload ? "min-h-14 w-full min-w-0 flex-1 rounded-2xl bg-transparent px-5 text-sm font-semibold text-white outline-none placeholder:text-gray-500" : "min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white"} required />
-        {isDownload && <button type="button" disabled={loading} onClick={async () => { try { setInput(await navigator.clipboard.readText()); } catch { setError("Please paste the link into the input field."); } }} className="px-3 text-xs font-bold text-gray-300"><Clipboard className="mr-1 inline h-3 w-3" />Paste</button>}
-        {input && isDownload && <button type="button" aria-label="Clear link" disabled={loading} onClick={() => { setInput(""); setDownloadResult(null); setJob(null); setError(""); setResumeId(""); }} className="px-2 text-gray-400 hover:text-white"><X className="h-4 w-4" /></button>}
-        {isDownload && (
-          <select aria-label="Download quality" disabled={loading} value={quality} onChange={(event) => setQuality(event.target.value)} className="min-h-12 rounded-2xl border border-white/10 bg-white/10 px-4 text-sm font-black text-white outline-none sm:mx-2">
-            <option className="bg-zinc-900" value="360p">360p</option>
-            <option className="bg-zinc-900" value="480p">480p</option>
-            <option className="bg-zinc-900" value="720p">720p HD</option>
-            <option className="bg-zinc-900" value="1080p">1080p</option>
-            <option className="bg-zinc-900" value="audio">Audio M4A</option>
-          </select>
-        )}
-        {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white sm:w-44" required />}
-        <button disabled={loading} className={isDownload ? "min-h-14 rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 px-8 font-black text-white shadow-lg shadow-red-500/30 transition hover:scale-[1.02] disabled:opacity-70" : "min-h-14 rounded-3xl bg-gradient-to-r from-flame to-ember px-8 font-black text-white shadow-glow transition hover:scale-[1.02] disabled:opacity-60"}>
-          {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Processing...</span> : <span className="inline-flex items-center gap-2">{isDownload ? <Download className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}{isDownload ? "Download Now" : tool.action}</span>}
-        </button>
-      </form>
+      {isDownload ? (
+        <form onSubmit={submit} className="mx-auto max-w-4xl rounded-[1.75rem] border border-orange-100 bg-white/95 p-3 shadow-2xl shadow-orange-100/80 backdrop-blur dark:border-white/10 dark:bg-[#121017] dark:shadow-red-950/20 sm:p-4">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_180px]">
+            <div className="flex min-h-14 min-w-0 items-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/70 focus-within:border-red-300 focus-within:ring-4 focus-within:ring-red-500/10 dark:border-white/10 dark:bg-black/25">
+              <input aria-label="YouTube video link" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={inputPlaceholder} className="h-14 min-w-0 flex-1 bg-transparent px-4 text-sm font-bold text-ink outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500 sm:text-base" required />
+              <button type="button" disabled={loading} onClick={async () => { try { setInput(await navigator.clipboard.readText()); } catch { setError("Please paste the link into the input field."); } }} className="mr-1 inline-flex h-10 shrink-0 items-center gap-1 rounded-xl bg-white px-3 text-xs font-black text-gray-600 shadow-sm hover:text-red-500 disabled:opacity-50 dark:bg-white/10 dark:text-gray-200"><Clipboard className="h-3.5 w-3.5" />Paste</button>
+              {input && <button type="button" aria-label="Clear link" disabled={loading} onClick={() => { setInput(""); setDownloadResult(null); setJob(null); setError(""); setResumeId(""); }} className="mr-2 grid h-10 w-10 shrink-0 place-items-center rounded-xl text-gray-400 hover:bg-white hover:text-red-500 disabled:opacity-50 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>}
+            </div>
+            <select aria-label="Download quality" disabled={loading} value={quality} onChange={(event) => setQuality(event.target.value)} className="h-14 w-full rounded-2xl border border-orange-100 bg-white px-4 text-sm font-black text-ink shadow-sm outline-none focus:border-red-300 focus:ring-4 focus:ring-red-500/10 disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white">
+              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="360p">360p MP4</option>
+              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="480p">480p MP4</option>
+              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="720p">720p HD</option>
+              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="1080p">1080p FHD</option>
+              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="audio">Audio M4A</option>
+            </select>
+            <button type="submit" disabled={loading} className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 px-5 text-sm font-black text-white shadow-lg shadow-red-500/30 hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-70 sm:text-base">
+              {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Preparing...</> : <><Download className="h-4 w-4" />Download</>}
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 sm:justify-between">
+            <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4 text-emerald-500" />Stream to device</span>
+            <span>No video storage</span>
+            <span>No upload wait</span>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={submit} className="rounded-[2rem] border border-orange-100 bg-white p-3 shadow-2xl shadow-orange-100/80 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:flex">
+          <input aria-label="Tool input" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={inputPlaceholder} className="min-h-14 flex-1 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white" required />
+          {tool.mode === "timestamp" && <input value={time} onChange={(event) => setTime(event.target.value)} placeholder="Time, e.g. 1:23" className="min-h-14 rounded-3xl bg-transparent px-5 text-ink outline-none placeholder:text-gray-400 dark:text-white sm:w-44" required />}
+          <button type="submit" disabled={loading} className="min-h-14 rounded-3xl bg-gradient-to-r from-flame to-ember px-8 font-black text-white shadow-glow transition hover:scale-[1.02] disabled:opacity-60">
+            {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Working...</span> : <span className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4" />{tool.action}</span>}
+          </button>
+        </form>
+      )}
       <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-500 dark:text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-500" />}{isDownload ? "Stream to your device · No video storage · No upload wait" : "Fast preview · Simple creator tools"}</p>
       {job && isDownload && <div role="status" aria-live="polite" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : job.status === "failed" || error ? <AlertCircle className="h-4 w-4 text-amber-500" /> : <Loader2 className="h-4 w-4 animate-spin text-red-400" />}{error ? "Download paused. You can retry below." : statusLabels[job.status] || "Checking your download…"}</span>{job.status === "downloading" && Number.isFinite(job.progress) && <div className="mt-3"><progress aria-label="Download progress" value={job.progress} max="100" className="h-2 w-full accent-red-500" /><span>{job.progress}%</span></div>}</div>}
       {error && <div role="alert" className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900"><p>{error}</p>{isDownload && <button type="button" disabled={loading} onClick={resumeId ? () => download(resumeId) : submit} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resumeId ? "Check download status" : "Try again"}</button>}</div>}
