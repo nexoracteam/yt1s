@@ -6,16 +6,36 @@ import { ShieldCheck, X } from "lucide-react";
 
 const storageKey = "yt1s-cookie-consent";
 
+function updateGoogleConsent(value) {
+  if (typeof window === "undefined") return;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function gtag() { window.dataLayer.push(arguments); };
+  const granted = value === "all" ? "granted" : "denied";
+  window.gtag("consent", "update", {
+    analytics_storage: granted,
+    ad_storage: granted,
+    ad_user_data: granted,
+    ad_personalization: granted
+  });
+}
+
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setVisible(!localStorage.getItem(storageKey)));
+    const frame = requestAnimationFrame(() => {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        try { updateGoogleConsent(JSON.parse(saved).value); } catch {}
+      }
+      setVisible(!saved);
+    });
     return () => cancelAnimationFrame(frame);
   }, []);
 
   function save(value) {
     localStorage.setItem(storageKey, JSON.stringify({ value, savedAt: new Date().toISOString() }));
+    updateGoogleConsent(value);
     setVisible(false);
   }
 
