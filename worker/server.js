@@ -62,6 +62,34 @@ function run(command, args, options = {}) {
   });
 }
 
+function baseYtDlpArgs() {
+  const args = [
+    "--no-check-certificates",
+    "--force-ipv4",
+    "--user-agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "--add-header",
+    "Accept-Language:en-US,en;q=0.9",
+    "--js-runtimes",
+    "node:/usr/local/bin/node",
+    "--extractor-args",
+    "youtube:player_client=android,web_safari,mweb"
+  ];
+
+  if (process.env.YOUTUBE_COOKIES_B64) {
+    args.push("--cookies", path.join(downloadDir, "youtube-cookies.txt"));
+  }
+
+  return args;
+}
+
+function cleanError(message = "") {
+  return String(message)
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
+    .replace(/\s*https?:\/\/\S+/g, "")
+    .slice(0, 900);
+}
+
 function formatSelector(quality) {
   if (quality === "audio") return "bestaudio[ext=m4a]/bestaudio/best";
   if (quality === "1080p") return "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best";
@@ -72,8 +100,15 @@ function formatSelector(quality) {
 }
 
 async function getInfo(url) {
-  const { stdout } = await run("yt-dlp", ["--dump-json", "--no-playlist", url]);
+  const { stdout } = await run("yt-dlp", [...baseYtDlpArgs(), "--dump-json", "--no-playlist", url]);
   return JSON.parse(stdout);
+}
+
+async function writeCookiesIfPresent() {
+  if (!process.env.YOUTUBE_COOKIES_B64) return;
+  const { writeFile } = await import("node:fs/promises");
+  const cookieText = Buffer.from(process.env.YOUTUBE_COOKIES_B64, "base64").toString("utf8");
+  await writeFile(path.join(downloadDir, "youtube-cookies.txt"), cookieText, "utf8");
 }
 
 async function uploadToCloudinary(filePath, publicId, resourceType) {
@@ -106,7 +141,12 @@ async function processJob(jobId, payload) {
     job.status = "downloading";
 
     const args = [
+      ...baseYtDlpArgs(),
       "--no-playlist",
+      "--retries",
+      "3",
+      "--fragment-retries",
+      "3",
       "--restrict-filenames",
       "--merge-output-format",
       ext === "mp4" ? "mp4" : "m4a",
@@ -135,7 +175,7 @@ async function processJob(jobId, payload) {
     await rm(finalPath, { force: true });
   } catch (error) {
     job.status = "failed";
-    job.error = error.message;
+    job.error = cleanError(error.message);
     job.failedAt = new Date().toISOString();
     await rm(downloadDir, { recursive: true, force: true });
     await mkdir(downloadDir, { recursive: true });
@@ -170,5 +210,6 @@ app.get("/job/:id", requireSecret, (req, res) => {
 
 app.listen(PORT, async () => {
   await mkdir(downloadDir, { recursive: true });
+  await writeCookiesIfPresent();
   console.log(`yt1s video worker listening on ${PORT}`);
 });
