@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import AdSlot from "../../components/AdSlot";
 import JsonLd from "../../components/JsonLd";
+import { LegalLongContent, SeoContent } from "../../components/SeoContent";
 import ToolClient from "../../components/ToolClient";
 import { FAQ, FeatureGrid, HowItWorks, ToolDirectory } from "../../components/Sections";
 import { allToolSlugs, getTool, legalPages, seoKeywords } from "../../lib/tools";
@@ -50,6 +51,7 @@ export default async function DynamicPage({ params }) {
             ))}
           </div>
         </div>
+        <LegalLongContent page={page} slug={slug} />
         <AdSlot label="Sponsored placement" slot={`${slug}-bottom-responsive`} size="inArticle" className="mt-10 px-0" />
       </main>
     );
@@ -71,6 +73,7 @@ export default async function DynamicPage({ params }) {
       <AdSlot slot={`${slug}-top-responsive`} className="pb-4" />
       <HowItWorks />
       <FeatureGrid tool={tool} />
+      <SeoContent tool={tool} />
       <AdSlot label="Advertisement" slot={`${slug}-mid-responsive`} size="inArticle" />
       <ToolDirectory />
       <FAQ />

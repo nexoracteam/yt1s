@@ -18,6 +18,7 @@ Legal pages:
 ${legalLines.join("\n")}
 
 Usage policy: only process content you own, have permission to use, or are legally allowed to access.
+Cookie and ads policy: ${siteUrl}/cookie-policy
 `, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",

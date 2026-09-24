@@ -1,5 +1,6 @@
 import { Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import CookieConsent from "../components/CookieConsent";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import JsonLd from "../components/JsonLd";
@@ -42,7 +43,12 @@ export const metadata = {
       "max-image-preview": "large",
       "max-video-preview": -1
     }
-  }
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg"
+  },
+  manifest: "/manifest.webmanifest"
 };
 
 export default function RootLayout({ children }) {
@@ -52,6 +58,7 @@ export default function RootLayout({ children }) {
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <Header />
         {children}
+        <CookieConsent />
         <Footer />
       </body>
     </html>

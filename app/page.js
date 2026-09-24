@@ -1,6 +1,7 @@
 import { DownloadCloud, Gauge, Globe2, ShieldCheck } from "lucide-react";
 import AdSlot from "../components/AdSlot";
 import JsonLd from "../components/JsonLd";
+import { SeoContent } from "../components/SeoContent";
 import ToolClient from "../components/ToolClient";
 import { FAQ, HowItWorks, Pricing, ToolDirectory } from "../components/Sections";
 import { brand, tools } from "../lib/tools";
@@ -38,6 +39,7 @@ export default function Home() {
         </div>
       </section>
       <HowItWorks />
+      <SeoContent tool={mainTool} home />
       <ToolDirectory />
       <AdSlot label="Sponsored placement" slot="home-mid-responsive" size="inArticle" />
       <Pricing />

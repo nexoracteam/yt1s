@@ -28,7 +28,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-white/10 px-4 py-5 text-center text-xs text-gray-400">
-        © 2026 {brand.name}. <Link href="/privacy" className="hover:text-white">Privacy Policy</Link> · <Link href="/terms" className="hover:text-white">Terms</Link> · <Link href="/dmca" className="hover:text-white">DMCA</Link> · <Link href="/contact" className="hover:text-white">Contact</Link>
+        © 2026 {brand.name}. <Link href="/privacy" className="hover:text-white">Privacy Policy</Link> · <Link href="/cookie-policy" className="hover:text-white">Cookie Policy</Link> · <Link href="/terms" className="hover:text-white">Terms</Link> · <Link href="/dmca" className="hover:text-white">DMCA</Link> · <Link href="/contact" className="hover:text-white">Contact</Link>
       </div>
     </footer>
   );
