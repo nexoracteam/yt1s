@@ -27,9 +27,13 @@ If `nexoracteam/yt1s` does not show in Railway after logging in with GitHub:
 CLOUDINARY_URL=cloudinary://...
 WORKER_SECRET=use-a-long-random-secret
 ENFORCE_WORKER_AUTH=false
+YOUTUBE_COOKIES_B64=base64-encoded-netscape-cookies
+YTDLP_PROXY=
 MAX_DURATION_SECONDS=1800
 MAX_FILE_MB=500
 ```
+
+`YOUTUBE_COOKIES_B64` is required when YouTube shows "Sign in to confirm you're not a bot" on Railway. Export fresh YouTube cookies in Netscape format, base64 encode the file, and put the value in Railway. If cookies keep failing because of Railway IP reputation, set `YTDLP_PROXY` to a residential proxy URL supported by `yt-dlp`.
 
 5. Deploy.
 6. Open the Railway service domain. Health check should return:

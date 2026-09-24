@@ -1,6 +1,6 @@
 import express from "express";
 import { spawn } from "node:child_process";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
@@ -20,6 +20,11 @@ const WORKER_SECRET = process.env.WORKER_SECRET || "";
 const ENFORCE_WORKER_AUTH = process.env.ENFORCE_WORKER_AUTH === "true";
 const MAX_DURATION_SECONDS = Number(process.env.MAX_DURATION_SECONDS || 1800);
 const MAX_FILE_MB = Number(process.env.MAX_FILE_MB || 500);
+const YTDLP_PROXY = process.env.YTDLP_PROXY || "";
+
+function hasYouTubeCookies() {
+  return Boolean(process.env.YOUTUBE_COOKIES_B64 || process.env.YOUTUBE_COOKIES);
+}
 
 function requireSecret(req, res, next) {
   if (!ENFORCE_WORKER_AUTH || !WORKER_SECRET) return next();
@@ -76,23 +81,33 @@ function baseYtDlpArgs() {
     "--remote-components",
     "ejs:github",
     "--extractor-args",
-    process.env.YOUTUBE_COOKIES_B64
+    hasYouTubeCookies()
       ? "youtube:player_client=web,web_safari"
       : "youtube:player_client=android,web_safari,mweb"
   ];
 
-  if (process.env.YOUTUBE_COOKIES_B64) {
+  if (hasYouTubeCookies()) {
     args.push("--cookies", path.join(downloadDir, "youtube-cookies.txt"));
+  }
+
+  if (YTDLP_PROXY) {
+    args.push("--proxy", YTDLP_PROXY);
   }
 
   return args;
 }
 
 function cleanError(message = "") {
-  return String(message)
+  const cleaned = String(message)
     .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "")
     .replace(/\s*https?:\/\/\S+/g, "")
     .slice(0, 900);
+
+  if (/not a bot|confirm youre not a bot|cookies-from-browser|HTTP Error 429/i.test(cleaned)) {
+    return "YouTube blocked this server request. Refresh YOUTUBE_COOKIES_B64 on Railway with fresh cookies, then redeploy/restart the worker. If it continues, add a residential proxy in YTDLP_PROXY.";
+  }
+
+  return cleaned;
 }
 
 function formatSelector(quality) {
@@ -110,10 +125,21 @@ async function getInfo(url) {
 }
 
 async function writeCookiesIfPresent() {
-  if (!process.env.YOUTUBE_COOKIES_B64) return;
+  if (!hasYouTubeCookies()) return;
   const { writeFile } = await import("node:fs/promises");
-  const cookieText = Buffer.from(process.env.YOUTUBE_COOKIES_B64, "base64").toString("utf8");
+  const cookieText = process.env.YOUTUBE_COOKIES_B64
+    ? Buffer.from(process.env.YOUTUBE_COOKIES_B64, "base64").toString("utf8")
+    : process.env.YOUTUBE_COOKIES;
   await writeFile(path.join(downloadDir, "youtube-cookies.txt"), cookieText, "utf8");
+}
+
+async function cleanupJobFiles(jobId) {
+  const entries = await readdir(downloadDir, { withFileTypes: true }).catch(() => []);
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith(jobId))
+      .map((entry) => rm(path.join(downloadDir, entry.name), { force: true }))
+  );
 }
 
 async function uploadToCloudinary(filePath, publicId, resourceType) {
@@ -135,6 +161,8 @@ async function processJob(jobId, payload) {
   const outputTemplate = path.join(downloadDir, `${jobId}.%(ext)s`);
 
   try {
+    await writeCookiesIfPresent();
+
     job.status = "checking";
     const info = await getInfo(url);
     const duration = Number(info.duration || 0);
@@ -182,13 +210,21 @@ async function processJob(jobId, payload) {
     job.status = "failed";
     job.error = cleanError(error.message);
     job.failedAt = new Date().toISOString();
-    await rm(downloadDir, { recursive: true, force: true });
     await mkdir(downloadDir, { recursive: true });
+    await cleanupJobFiles(jobId);
   }
 }
 
 app.get("/health", (req, res) => {
-  res.json({ ok: true, app: "yt1s-video-worker", cloudinary: Boolean(process.env.CLOUDINARY_URL) });
+  res.json({
+    ok: true,
+    app: "yt1s-video-worker",
+    cloudinary: Boolean(process.env.CLOUDINARY_URL),
+    youtubeCookies: hasYouTubeCookies(),
+    proxy: Boolean(YTDLP_PROXY),
+    maxDurationSeconds: MAX_DURATION_SECONDS,
+    maxFileMb: MAX_FILE_MB
+  });
 });
 
 app.post("/download", requireSecret, async (req, res) => {
