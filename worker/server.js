@@ -72,8 +72,12 @@ function baseYtDlpArgs() {
     "Accept-Language:en-US,en;q=0.9",
     "--js-runtimes",
     "node:/usr/local/bin/node",
+    "--remote-components",
+    "ejs:github",
     "--extractor-args",
-    "youtube:player_client=android,web_safari,mweb"
+    process.env.YOUTUBE_COOKIES_B64
+      ? "youtube:player_client=web,web_safari"
+      : "youtube:player_client=android,web_safari,mweb"
   ];
 
   if (process.env.YOUTUBE_COOKIES_B64) {
