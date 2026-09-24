@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { DownloadCloud, Gauge, Globe2, ShieldCheck } from "lucide-react";
 import AdSlot from "../components/AdSlot";
 import JsonLd from "../components/JsonLd";
 import { SeoContent } from "../components/SeoContent";
 import ToolClient from "../components/ToolClient";
 import { FAQ, HowItWorks, Pricing, ToolDirectory } from "../components/Sections";
-import { brand, tools } from "../lib/tools";
+import { brand, peopleAlsoSearchKeywords, tools } from "../lib/tools";
 import { faqSchema, toolsItemListSchema } from "../lib/seo";
 
 export default function Home() {
@@ -36,6 +37,23 @@ export default function Home() {
           <p className="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300">
             Use yt1s.video as a youtube video downloader, yt video downloader, yt short downloader, full HD video downloader or 4K video downloader for public content. The tool keeps ad placeholders away from the form so the download journey remains focused.
           </p>
+        </div>
+      </section>
+      <section className="mx-auto max-w-5xl px-4 pb-12 sm:px-6 lg:px-8">
+        <div className="rounded-[2rem] border border-orange-100 bg-orange-50/70 p-6 dark:border-white/10 dark:bg-zinc-900/70 sm:p-8">
+          <p className="font-black uppercase tracking-[0.28em] text-flame">People also search</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-ink dark:text-white">YT1s search terms for audio, MP4 and creator tools</h2>
+          <p className="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300">
+            Visitors often search for YT1s org download, YT1s AI, YT1s audio, YT1s click, Yts1 MP4 converter, Yst1 download, YT15 and Yt1 music when they want a fast downloader or creator workflow. We explain these variations in a dedicated SEO guide and connect each intent to the right yt1s.video tool.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {peopleAlsoSearchKeywords.map((keyword) => (
+              <span key={keyword} className="rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-black text-gray-700 dark:border-white/10 dark:bg-zinc-950 dark:text-gray-200">{keyword}</span>
+            ))}
+          </div>
+          <Link href="/blog/yt1s-search-terms-guide" className="mt-6 inline-flex rounded-full bg-ink px-5 py-3 text-sm font-black text-white hover:bg-flame dark:bg-white dark:text-ink dark:hover:bg-flame dark:hover:text-white">
+            Read the YT1s keyword guide
+          </Link>
         </div>
       </section>
       <HowItWorks />
