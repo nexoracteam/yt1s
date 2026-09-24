@@ -153,6 +153,11 @@ async function uploadToCloudinary(filePath, publicId, resourceType) {
   });
 }
 
+function directDownloadUrl(url) {
+  if (!url || !url.includes("res.cloudinary.com") || url.includes("/fl_attachment/")) return url;
+  return url.replace("/upload/", "/upload/fl_attachment/");
+}
+
 async function processJob(jobId, payload) {
   const job = jobs.get(jobId);
   const url = normalizeUrl(payload.url);
@@ -203,7 +208,8 @@ async function processJob(jobId, payload) {
     const upload = await uploadToCloudinary(finalPath, `${jobId}-${quality}`, quality === "audio" ? "video" : "video");
 
     job.status = "completed";
-    job.downloadUrl = upload.secure_url;
+    job.previewUrl = upload.secure_url;
+    job.downloadUrl = directDownloadUrl(upload.secure_url);
     job.bytes = fileStat.size;
     job.completedAt = new Date().toISOString();
 
