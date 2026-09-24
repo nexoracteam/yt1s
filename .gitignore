@@ -5,5 +5,7 @@ node_modules/
 out/
 dist/
 *.log
+youtube-cookies.txt
+*cookies*.txt
 .vercel/
 .vercel
