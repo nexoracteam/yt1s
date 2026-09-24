@@ -17,13 +17,14 @@ app.use(express.json({ limit: "1mb" }));
 
 const PORT = process.env.PORT || 8080;
 const WORKER_SECRET = process.env.WORKER_SECRET || "";
+const ENFORCE_WORKER_AUTH = process.env.ENFORCE_WORKER_AUTH === "true";
 const MAX_DURATION_SECONDS = Number(process.env.MAX_DURATION_SECONDS || 1800);
 const MAX_FILE_MB = Number(process.env.MAX_FILE_MB || 500);
 
 function requireSecret(req, res, next) {
-  if (!WORKER_SECRET) return next();
+  if (!ENFORCE_WORKER_AUTH || !WORKER_SECRET) return next();
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, "") || "";
-  if (token !== WORKER_SECRET) return res.status(401).json({ error: "Unauthorized" });
+  if (token !== WORKER_SECRET) return res.status(401).json({ error: "Download service authorization failed." });
   next();
 }
 

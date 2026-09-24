@@ -26,6 +26,7 @@ If `nexoracteam/yt1s` does not show in Railway after logging in with GitHub:
 ```env
 CLOUDINARY_URL=cloudinary://...
 WORKER_SECRET=use-a-long-random-secret
+ENFORCE_WORKER_AUTH=false
 MAX_DURATION_SECONDS=1800
 MAX_FILE_MB=500
 ```
