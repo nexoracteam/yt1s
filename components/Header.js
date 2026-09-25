@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { brand, toolCategories } from "../lib/tools";
 
 export default function Header() {
@@ -6,7 +7,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-orange-100 bg-white/85 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/80">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-flame to-ember font-black text-white shadow-glow">Y</span>
+          <Image src="/icon.svg" alt="yt1s.video logo" width={48} height={48} priority className="h-12 w-12 rounded-2xl shadow-glow" />
           <span>
             <span className="block font-display text-lg font-black tracking-tight text-ink dark:text-white">{brand.name}</span>
             <span className="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">YT downloader, no clutter</span>
