@@ -4,6 +4,8 @@ import "./globals.css";
 import CookieConsent from "../components/CookieConsent";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import MonetagControlledTag from "../components/MonetagControlledTag";
+import SidebarAds from "../components/SidebarAds";
 import JsonLd from "../components/JsonLd";
 import { brand, seoKeywords } from "../lib/tools";
 import { organizationSchema, siteUrl, websiteSchema } from "../lib/seo";
@@ -12,23 +14,27 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
 const googleAnalyticsId = "G-0NZ5W4C28E";
 const googleSiteVerification = "KGQZY9TuxjDpCHzABv7mXt1cJ8e580-KG-Evsybccp4";
+const monetagVerification = "83de405a30af5bf0fafbd875f00e8e3e";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "YouTube Video Downloader - HD, Shorts, 4K & Audio | yt1s.video",
+    default: "YT1s YouTube Downloader - MP4, Audio, Shorts & HD | yt1s.video",
     template: "%s | yt1s.video"
   },
-  description: "Fast yt downloader for public YouTube videos, Shorts, full HD video downloader links, 4K-ready formats, thumbnails and audio tools.",
+  description: "yt1s.video is a fast yt1s YouTube downloader for public videos, Shorts, full HD MP4 links, 4K-ready formats, thumbnails and audio tools.",
   keywords: [...seoKeywords, "youtube shorts downloader", "youtube to mp3", "youtube thumbnail downloader", "download youtube video"],
   verification: {
     google: googleSiteVerification
+  },
+  other: {
+    monetag: monetagVerification
   },
   alternates: {
     canonical: siteUrl
   },
   openGraph: {
-    title: "YouTube Video Downloader - HD, Shorts, 4K & Audio",
+    title: "YT1s YouTube Downloader - MP4, Audio, Shorts & HD",
     description: brand.description,
     url: siteUrl,
     siteName: brand.name,
@@ -36,7 +42,7 @@ export const metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "YouTube Video Downloader - yt1s.video",
+    title: "YT1s YouTube Downloader - yt1s.video",
     description: brand.description
   },
   robots: {
@@ -51,7 +57,11 @@ export const metadata = {
     }
   },
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/icon.svg", type: "image/svg+xml" }
+    ],
+    shortcut: "/favicon.ico",
     apple: "/apple-icon.svg"
   },
   manifest: "/manifest.webmanifest"
@@ -86,6 +96,8 @@ export default function RootLayout({ children }) {
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <Header />
         {children}
+        <SidebarAds />
+        <MonetagControlledTag />
         <CookieConsent />
         <Footer />
       </body>

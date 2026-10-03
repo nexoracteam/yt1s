@@ -101,7 +101,7 @@ function GeneratorResults({ tool, input }) {
       </div>
       <div className="space-y-3">
         {items.map((item) => (
-          <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-800 whitespace-pre-line dark:bg-zinc-800 dark:text-gray-100">{item}</motion.div>
+          <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} key={item} className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-orange-950 whitespace-pre-line dark:bg-zinc-800 dark:text-orange-50">{item}</motion.div>
         ))}
       </div>
     </motion.div>
@@ -214,7 +214,7 @@ function DownloadResults({ result, onFormat, busy }) {
 export default function ToolClient({ tool }) {
   const [input, setInput] = useState("");
   const [time, setTime] = useState("");
-  const [quality, setQuality] = useState(tool.title.includes("MP3") ? "audio" : "720p");
+  const [quality, setQuality] = useState(tool.defaultQuality || (tool.title.includes("MP3") ? "audio" : "720p"));
   const [job, setJob] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -227,7 +227,7 @@ export default function ToolClient({ tool }) {
 
   async function request(url, options, signal) {
     const response = await fetch(url, { ...options, signal, cache: "no-store" });
-    const data = await response.json().catch(() => { throw new DownloadError("SERVICE_BUSY"); });
+    const data = await response.json().catch(() => { throw new DownloadError("DELIVERY_UNAVAILABLE"); });
     if (!response.ok) {
       const error = new Error(safeDownloadMessage(data, "SERVICE_BUSY"));
       error.status = response.status;
@@ -252,7 +252,9 @@ export default function ToolClient({ tool }) {
         if (signal.aborted) throw error;
         if ([400, 404].includes(error.status)) { setResumeId(""); throw error; }
         failures += 1;
-        if (failures >= 4) throw error;
+        if (failures >= 10) throw error;
+        setJob((current) => current ? { ...current, status: "retrying" } : current);
+        await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * failures, 5000)));
       }
     }
     throw new DownloadError("TIMEOUT");

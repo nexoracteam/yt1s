@@ -1,14 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, DownloadCloud, Layers3, ShieldCheck, Zap } from "lucide-react";
-import { toolCategories, tools } from "../lib/tools";
+import { defaultFaqs, defaultHowToSteps, toolCategories, tools } from "../lib/tools";
 import Reveal from "./Reveal";
 
-export function HowItWorks() {
-  const steps = [
-    ["01", "Paste a URL", "Drop in a public YouTube video, Short, channel, playlist, or creator topic."],
-    ["02", "Pick Your Format", "Choose 360p, 480p, 720p, 1080p, audio, thumbnails or creator tools."],
-    ["03", "Save the Result", "Open the direct stream download, copy metadata, or use the generated creator asset instantly."]
-  ];
+export function HowItWorks({ tool } = {}) {
+  const steps = tool?.steps || defaultHowToSteps;
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="text-center">
@@ -36,7 +32,7 @@ export function FeatureGrid({ tool }) {
           <div key={feature} className="rounded-3xl bg-white p-6 shadow-xl shadow-orange-100/70 dark:bg-zinc-900 dark:shadow-none">
             <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-flame dark:bg-flame/10">{[<Zap key="z" />, <ShieldCheck key="s" />, <DownloadCloud key="d" />, <BadgeCheck key="b" />][index % 4]}</div>
             <h3 className="font-black text-ink dark:text-white">{feature}</h3>
-            <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">Built into the {tool.title} workflow with a fast, mobile-friendly interface.</p>
+            <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-300">{tool.featureDetails?.[index] || `Built into the ${tool.title} workflow with a fast, mobile-friendly interface.`}</p>
           </div>
         ))}
       </div>
@@ -57,7 +53,7 @@ export function ToolDirectory() {
             <h3 className="text-xl font-black text-ink dark:text-white">{category.title}</h3>
             <div className="mt-5 space-y-3">
               {category.tools.map((slug) => (
-                <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-gray-700 hover:bg-flame hover:text-white dark:bg-zinc-800 dark:text-gray-200 dark:hover:bg-flame">
+                <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950 hover:bg-flame hover:text-white dark:bg-zinc-800 dark:text-orange-50 dark:hover:bg-flame">
                   {tools[slug].title}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -92,15 +88,8 @@ export function Pricing() {
   );
 }
 
-export function FAQ() {
-  const questions = [
-    ["Is yt1s.video free to use?", "Yes. Core downloader, thumbnail, timestamp, and creator tools are available without account signup."],
-    ["Which formats are supported?", "Supported public videos can be prepared as MP4 video or M4A audio, with available quality depending on the source."],
-    ["Can I use this as a YouTube Shorts downloader?", "Yes. Paste a public Shorts URL and choose a video or audio format when source delivery is available."],
-    ["Is this a youtube video downloader no ads workflow?", "The main downloader flow stays clean and focused. Ad placeholders are reserved outside the form area."],
-    ["Can I download thumbnails?", "Yes. MaxRes, standard, high, medium, and default YouTube thumbnail sizes are available instantly."],
-    ["What content can I download?", "Only download content you own, have permission to use, or are legally allowed to access." ]
-  ];
+export function FAQ({ tool } = {}) {
+  const questions = tool?.faqs || defaultFaqs;
   return (
     <section className="mx-auto max-w-4xl px-4 py-20 sm:px-6 lg:px-8">
       <h2 className="text-center text-4xl font-black text-ink dark:text-white">Frequently asked questions</h2>

@@ -65,8 +65,8 @@ export async function createCookieStore(directory, env) {
 }
 
 export function ytDlpArgs({ cookiePath, proxy }) {
-  const args = ["--ignore-config", "--no-playlist", "--force-ipv4", "--socket-timeout", "20",
-    "--retries", "2", "--fragment-retries", "2", "--extractor-retries", "1",
+  const args = ["--ignore-config", "--no-playlist", "--force-ipv4", "--socket-timeout", "30",
+    "--retries", "4", "--fragment-retries", "4", "--extractor-retries", "2",
     "--js-runtimes", `node:${process.execPath}`];
   // Use the maintained default clients from the installed yt-dlp version.
   if (cookiePath) args.push("--cookies", cookiePath);

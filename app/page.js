@@ -5,11 +5,12 @@ import JsonLd from "../components/JsonLd";
 import { SeoContent } from "../components/SeoContent";
 import ToolClient from "../components/ToolClient";
 import { FAQ, HowItWorks, Pricing, ToolDirectory } from "../components/Sections";
-import { brand, peopleAlsoSearchKeywords, tools } from "../lib/tools";
+import { brand, peopleAlsoSearchKeywords, priorityToolSlugs, tools } from "../lib/tools";
 import { faqSchema, toolsItemListSchema } from "../lib/seo";
 
 export default function Home() {
   const mainTool = tools["youtube-video-downloader"];
+  const priorityTools = priorityToolSlugs.map((slug) => ({ slug, ...tools[slug] }));
   return (
     <main>
       <JsonLd data={[faqSchema(), toolsItemListSchema()]} />
@@ -37,6 +38,26 @@ export default function Home() {
           <p className="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300">
             Use yt1s.video as a youtube video downloader, yt video downloader, yt short downloader, full HD video downloader or 4K video downloader for public content. The tool keeps ad placeholders away from the form so the download journey remains focused.
           </p>
+        </div>
+      </section>
+      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8">
+        <div className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:p-8">
+          <div className="max-w-3xl">
+            <p className="font-black uppercase tracking-[0.28em] text-flame">Popular downloader links</p>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-ink dark:text-white">Direct pages for YT1s, MP4, audio and Shorts searches</h2>
+            <p className="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300">
+              These internal links route common searches like YT1s downloader, YTS1 MP4 converter, YST1 download, YouTube to MP4, YouTube audio downloader and Shorts downloader to the most relevant page.
+            </p>
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {priorityTools.map((tool) => (
+              <Link key={tool.slug} href={`/${tool.slug}`} className="group rounded-3xl bg-orange-50 p-5 transition hover:-translate-y-1 hover:bg-flame hover:shadow-xl hover:shadow-orange-200/70 dark:bg-zinc-800 dark:hover:bg-flame">
+                <h3 className="font-black text-orange-950 group-hover:text-white dark:text-orange-50">{tool.title}</h3>
+                <p className="mt-2 line-clamp-3 text-xs leading-6 text-orange-900/80 group-hover:text-white/90 dark:text-orange-100/80">{tool.summary}</p>
+                <span className="mt-4 inline-flex text-xs font-black text-flame group-hover:text-white">Open tool →</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
       <section className="mx-auto max-w-5xl px-4 pb-12 sm:px-6 lg:px-8">

@@ -12,6 +12,7 @@ function failure(code, status) {
 async function proxy(path, options = {}) {
   try {
     const base = (process.env.DOWNLOAD_WORKER_URL || "https://yt1s-production.up.railway.app").replace(/\/$/, "");
+    const timeoutMs = options.method === "POST" ? 45000 : 30000;
     const response = await fetch(`${base}${path}`, {
       ...options,
       headers: {
@@ -19,9 +20,9 @@ async function proxy(path, options = {}) {
         ...(process.env.WORKER_SECRET ? { Authorization: `Bearer ${process.env.WORKER_SECRET}` } : {})
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(timeoutMs)
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => null);
     if (!data || typeof data !== "object") return failure("SERVICE_BUSY", 502);
     if (!response.ok || data.status === "failed" || data.error) {
       data.error = safeDownloadMessage(data, response.status === 404 ? "JOB_EXPIRED" : "SERVICE_BUSY");

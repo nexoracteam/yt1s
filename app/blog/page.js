@@ -5,7 +5,7 @@ import { allBlogSlugs, blogPosts } from "../../lib/blog";
 import { absoluteUrl, baseOpenGraph, siteUrl, titleFor } from "../../lib/seo";
 
 export const metadata = {
-  title: titleFor("Creator Blog"),
+  title: "Creator Blog",
   description: "SEO guides for YouTube downloader searches, YT1s keywords, audio workflows, MP4 converter intent, Shorts and creator tools.",
   alternates: { canonical: absoluteUrl("/blog") },
   openGraph: {

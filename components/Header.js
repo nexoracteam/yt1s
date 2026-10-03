@@ -1,6 +1,15 @@
 import Link from "next/link";
 import Image from "next/image";
-import { brand, toolCategories } from "../lib/tools";
+import { brand } from "../lib/tools";
+
+const headerLinks = [
+  ["/yt1s-youtube-downloader", "YT1s Downloader"],
+  ["/youtube-to-mp4", "YouTube to MP4"],
+  ["/youtube-mp4-downloader", "MP4 Downloader"],
+  ["/youtube-audio-downloader", "Audio"],
+  ["/youtube-shorts-downloader", "Shorts"],
+  ["/blog", "Blog"]
+];
 
 export default function Header() {
   return (
@@ -13,14 +22,12 @@ export default function Header() {
             <span className="hidden text-xs text-gray-500 dark:text-gray-400 sm:block">YT downloader, no clutter</span>
           </span>
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-semibold text-gray-700 dark:text-gray-300 lg:flex">
-          {toolCategories.map((category) => (
-            <Link key={category.title} href={category.href} className="hover:text-flame">
-              {category.title}
+        <nav className="hidden items-center gap-4 text-sm font-semibold text-gray-700 dark:text-gray-300 lg:flex">
+          {headerLinks.map(([href, label]) => (
+            <Link key={href} href={href} className="hover:text-flame">
+              {label}
             </Link>
           ))}
-          <Link href="/youtube-shorts-downloader" className="hover:text-flame">Shorts</Link>
-          <Link href="/blog" className="hover:text-flame">Blog</Link>
         </nav>
         <Link href="/youtube-video-downloader" className="rounded-full bg-ink px-5 py-2 text-sm font-bold text-white shadow-lg shadow-gray-300 transition hover:bg-flame dark:bg-white dark:text-ink dark:shadow-none dark:hover:bg-flame dark:hover:text-white">
           Start Free

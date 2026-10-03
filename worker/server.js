@@ -18,12 +18,15 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
   const maxBytes = Number(env.MAX_FILE_MB || 500) * 1024 * 1024;
   const ttlMs = 10 * 60 * 1000;
+  const prepareConcurrency = Math.max(1, Number(env.PREPARE_CONCURRENCY || 3));
+  const maxQueue = Math.max(10, Number(env.MAX_QUEUE || 50));
+  const streamConcurrency = Math.max(1, Number(env.STREAM_CONCURRENCY || 10));
   const jobs = new Map();
   const sources = new Map();
   let activeStreams = 0;
   const byVideo = new Map();
   const queue = [];
-  let active = false;
+  let active = 0;
   const app = express();
   app.use(express.json({ limit: "16kb" }));
 
@@ -106,17 +109,18 @@ export async function createWorker({ env = process.env, directory = path.join(__
   }
 
   async function drain() {
-    if (active) return;
-    active = true;
-    try {
-      while (queue.length) await processJob(queue.shift());
-    } finally { active = false; }
+    while (active < prepareConcurrency && queue.length) {
+      const job = queue.shift();
+      active++;
+      void processJob(job).finally(() => { active--; void drain(); });
+    }
   }
 
   app.get("/health", (req, res) => res.json({
     ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v3",
     cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available,
-    proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024
+    proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+    prepareConcurrency, streamConcurrency, maxQueue
   }));
 
   app.post("/download", requireSecret, (req, res) => {
@@ -130,7 +134,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     if (existing && existing.status !== "failed") {
       return res.status(existing.status === "completed" ? 200 : 202).json({ ...existing, jobId: existing.id, cached: existing.status === "completed" });
     }
-    if (queue.length >= 10 || jobs.size >= 500) return res.status(429).json(publicFailure(new DownloadError("SERVICE_BUSY")));
+    if (queue.length >= maxQueue || jobs.size >= 500) return res.status(429).json(publicFailure(new DownloadError("SERVICE_BUSY")));
     const id = nanoid(12);
     const job = { id, videoId, quality, status: "queued", createdAt: new Date().toISOString() };
     jobs.set(id, job);
@@ -152,7 +156,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const job = jobs.get(req.params.id);
     const source = sources.get(req.params.id);
     if (!job || !source || req.query.token !== source.token) return res.status(404).send("Download link expired. Please generate a fresh link.");
-    if (activeStreams >= 3) return res.status(429).send("Downloads are busy. Please try again shortly.");
+    if (activeStreams >= streamConcurrency) return res.status(503).send("The download is still preparing. Please try the download button again in a moment.");
     if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
     activeStreams++;
     try { await stream(req, res, source.info, job.quality, { maxBytes, log }); }

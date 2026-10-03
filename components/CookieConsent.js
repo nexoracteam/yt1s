@@ -36,6 +36,7 @@ export default function CookieConsent() {
   function save(value) {
     localStorage.setItem(storageKey, JSON.stringify({ value, savedAt: new Date().toISOString() }));
     updateGoogleConsent(value);
+    window.dispatchEvent(new CustomEvent("yt1s-cookie-consent", { detail: { value } }));
     setVisible(false);
   }
 

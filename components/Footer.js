@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { brand, seoKeywords, toolCategories, tools } from "../lib/tools";
+import { brand, priorityToolSlugs, seoKeywords, toolCategories, tools } from "../lib/tools";
 
 export default function Footer() {
   return (
@@ -11,6 +11,16 @@ export default function Footer() {
           <p className="mt-4 text-sm text-gray-300"><a href={`mailto:${brand.email}`} className="hover:text-white">{brand.email}</a></p>
           <p className="mt-6 text-xs text-gray-400">Use these tools only for content you own or are allowed to process.</p>
           <p className="mt-4 max-w-md text-xs leading-6 text-gray-500">Popular searches: {seoKeywords.slice(0, 5).join(", ")}.</p>
+          <div className="mt-6">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-orange-200">Popular downloader pages</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {priorityToolSlugs.map((slug) => (
+                <Link key={slug} href={`/${slug}`} className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white hover:border-orange-200 hover:bg-flame">
+                  {tools[slug].title}
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {toolCategories.map((category) => (
