@@ -9,6 +9,7 @@ import SidebarAds from "../components/SidebarAds";
 import JsonLd from "../components/JsonLd";
 import { brand, seoKeywords } from "../lib/tools";
 import { organizationSchema, siteUrl, websiteSchema } from "../lib/seo";
+import { Analytics } from "@vercel/analytics/next";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
@@ -100,6 +101,7 @@ export default function RootLayout({ children }) {
         <MonetagControlledTag />
         <CookieConsent />
         <Footer />
+        <Analytics />
       </body>
     </html>
   );
