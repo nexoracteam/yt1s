@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
+    "@vercel/analytics": "^2.0.1",
     "cloudinary": "^2.5.1",
     "framer-motion": "^13.4.2",
     "lucide-react": "^1.47.0",
