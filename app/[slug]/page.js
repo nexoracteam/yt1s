@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import AdSlot from "../../components/AdSlot";
 import JsonLd from "../../components/JsonLd";
 import { LegalLongContent, SeoContent } from "../../components/SeoContent";
 import ToolClient from "../../components/ToolClient";
@@ -40,7 +39,6 @@ export default async function DynamicPage({ params }) {
           { "@context": "https://schema.org", "@type": "WebPage", name: page.title, url: absoluteUrl(slug), description: page.description, publisher: { "@type": "Organization", name: "yt1s.video" } },
           breadcrumbSchema([{ name: "Home", url: absoluteUrl("/") }, { name: page.title, url: absoluteUrl(slug) }])
         ]} />
-        <AdSlot label="Advertisement" slot={`${slug}-top-responsive`} className="mb-10 px-0" />
         <div className="mx-auto max-w-4xl rounded-[2rem] bg-white p-8 shadow-2xl shadow-orange-100/80 dark:bg-zinc-900 dark:shadow-none sm:p-12">
           <p className="font-black uppercase tracking-[0.3em] text-flame">yt1s.video</p>
           <h1 className="mt-4 font-display text-5xl font-black tracking-tight text-ink dark:text-white">{page.title}</h1>
@@ -55,7 +53,6 @@ export default async function DynamicPage({ params }) {
           </div>
         </div>
         <LegalLongContent page={page} slug={slug} />
-        <AdSlot label="Sponsored placement" slot={`${slug}-bottom-responsive`} size="inArticle" className="mt-10 px-0" />
       </main>
     );
   }
@@ -73,11 +70,9 @@ export default async function DynamicPage({ params }) {
         </div>
         <div className="mt-10"><ToolClient tool={tool} /></div>
       </section>
-      <AdSlot slot={`${slug}-top-responsive`} className="pb-4" />
       <HowItWorks tool={tool} />
       <FeatureGrid tool={tool} />
       <SeoContent tool={tool} />
-      <AdSlot label="Advertisement" slot={`${slug}-mid-responsive`} size="inArticle" />
       <ToolDirectory />
       <FAQ tool={tool} />
     </main>

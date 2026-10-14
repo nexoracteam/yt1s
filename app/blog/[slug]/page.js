@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
-import AdSlot from "../../../components/AdSlot";
 import JsonLd from "../../../components/JsonLd";
 import { allBlogSlugs, blogBreadcrumbSchema, blogFaqSchema, blogPostSchema, blogPostUrl, getBlogPost } from "../../../lib/blog";
 import { baseOpenGraph, titleFor } from "../../../lib/seo";
@@ -47,12 +46,10 @@ export default async function BlogPostPage({ params }) {
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
             {post.keywords.slice(0, 10).map((keyword) => (
-              <span key={keyword} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-black text-gray-700 dark:border-white/10 dark:bg-zinc-950 dark:text-gray-200">{keyword}</span>
+              <span key={keyword} className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-black text-orange-950 dark:border-white/10 dark:bg-zinc-950 dark:text-orange-50">{keyword}</span>
             ))}
           </div>
         </header>
-
-        <AdSlot label="Advertisement" slot={`${post.slug}-top-responsive`} className="mt-10 px-0" />
 
         <section className="mt-10 rounded-[2rem] border border-orange-100 bg-orange-50/70 p-6 dark:border-white/10 dark:bg-zinc-900/70 sm:p-8">
           <h2 className="text-2xl font-black text-ink dark:text-white">Quick internal links</h2>

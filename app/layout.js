@@ -4,8 +4,6 @@ import "./globals.css";
 import CookieConsent from "../components/CookieConsent";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
-import MonetagControlledTag from "../components/MonetagControlledTag";
-import SidebarAds from "../components/SidebarAds";
 import JsonLd from "../components/JsonLd";
 import { brand, seoKeywords } from "../lib/tools";
 import { organizationSchema, siteUrl, websiteSchema } from "../lib/seo";
@@ -14,7 +12,6 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
 const googleAnalyticsId = "G-0NZ5W4C28E";
 const googleSiteVerification = "KGQZY9TuxjDpCHzABv7mXt1cJ8e580-KG-Evsybccp4";
-const monetagVerification = "83de405a30af5bf0fafbd875f00e8e3e";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
@@ -26,9 +23,6 @@ export const metadata = {
   keywords: [...seoKeywords, "youtube shorts downloader", "youtube to mp3", "youtube thumbnail downloader", "download youtube video"],
   verification: {
     google: googleSiteVerification
-  },
-  other: {
-    monetag: monetagVerification
   },
   alternates: {
     canonical: siteUrl
@@ -80,10 +74,7 @@ export default function RootLayout({ children }) {
               try { saved = JSON.parse(localStorage.getItem('yt1s-cookie-consent') || 'null'); } catch (e) {}
               var granted = saved && saved.value === 'all' ? 'granted' : 'denied';
               gtag('consent', 'default', {
-                analytics_storage: granted,
-                ad_storage: granted,
-                ad_user_data: granted,
-                ad_personalization: granted
+                analytics_storage: granted
               });
             })();
             gtag('js', new Date());
@@ -96,8 +87,6 @@ export default function RootLayout({ children }) {
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <Header />
         {children}
-        <SidebarAds />
-        <MonetagControlledTag />
         <CookieConsent />
         <Footer />
       </body>

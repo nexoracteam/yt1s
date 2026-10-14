@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { DownloadCloud, Gauge, Globe2, ShieldCheck } from "lucide-react";
-import AdSlot from "../components/AdSlot";
 import JsonLd from "../components/JsonLd";
 import { SeoContent } from "../components/SeoContent";
 import ToolClient from "../components/ToolClient";
@@ -31,12 +30,11 @@ export default function Home() {
           ))}
         </div>
       </section>
-      <AdSlot slot="home-top-responsive" className="pb-4" />
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:p-8">
           <h2 className="text-3xl font-black tracking-tight text-ink dark:text-white">Fast yt video downloader with a no-clutter workflow</h2>
           <p className="mt-4 text-sm leading-7 text-gray-600 dark:text-gray-300">
-            Use yt1s.video as a youtube video downloader, yt video downloader, yt short downloader, full HD video downloader or 4K video downloader for public content. The tool keeps ad placeholders away from the form so the download journey remains focused.
+            Use yt1s.video as a youtube video downloader, yt video downloader, yt short downloader, full HD video downloader or 4K video downloader for public content. The tool keeps the form clear, direct and focused on the download journey.
           </p>
         </div>
       </section>
@@ -80,7 +78,6 @@ export default function Home() {
       <HowItWorks />
       <SeoContent tool={mainTool} home />
       <ToolDirectory />
-      <AdSlot label="Sponsored placement" slot="home-mid-responsive" size="inArticle" />
       <Pricing />
       <FAQ />
     </main>

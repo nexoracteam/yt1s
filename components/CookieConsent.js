@@ -12,10 +12,7 @@ function updateGoogleConsent(value) {
   window.gtag = window.gtag || function gtag() { window.dataLayer.push(arguments); };
   const granted = value === "all" ? "granted" : "denied";
   window.gtag("consent", "update", {
-    analytics_storage: granted,
-    ad_storage: granted,
-    ad_user_data: granted,
-    ad_personalization: granted
+    analytics_storage: granted
   });
 }
 
@@ -52,7 +49,7 @@ export default function CookieConsent() {
           <div>
             <h2 className="text-sm font-black text-ink dark:text-white">Cookie consent</h2>
             <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
-              We use essential storage for your preferences and may use analytics or advertising cookies after approval to improve yt1s.video. Read our <Link href="/cookie-policy" className="font-bold text-flame">Cookie Policy</Link> and <Link href="/privacy" className="font-bold text-flame">Privacy Policy</Link>.
+              We use essential storage for your preferences and may use privacy-conscious analytics after approval to improve yt1s.video. Read our <Link href="/cookie-policy" className="font-bold text-flame">Cookie Policy</Link> and <Link href="/privacy" className="font-bold text-flame">Privacy Policy</Link>.
             </p>
           </div>
         </div>
