@@ -65,7 +65,7 @@ export async function createCookieStore(directory, env) {
 }
 
 export function ytDlpArgs({ cookiePath, proxy, playerClients }) {
-  const args = ["--ignore-config", "--no-playlist", "--force-ipv4", "--socket-timeout", "30",
+  const args = ["--ignore-config", "--no-playlist", "--socket-timeout", "30",
     "--retries", "4", "--fragment-retries", "4", "--extractor-retries", "2",
     "--sleep-requests", "1", "--js-runtimes", `node:${process.execPath}`];
   if (playerClients) args.push("--extractor-args", `youtube:player_client=${playerClients}`);
