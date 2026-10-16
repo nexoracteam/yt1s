@@ -72,6 +72,21 @@ test("bounded retries never leak internal errors and failure does not remove coo
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /initial/);
 });
 
+test("unknown extractor failures continue through the bounded client fallbacks", async (t) => {
+  let calls = 0;
+  const f = await fixture(t, {
+    async run() {
+      calls++;
+      if (calls < 3) throw new Error("Unexpected extractor response");
+      return { stdout: JSON.stringify({ title: "Recovered", duration: 20, height: 720, availability: "public", url: "https://example.googlevideo.com/video", vcodec: "avc1", acodec: "mp4a" }) };
+    }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.attempt, 3);
+  assert.equal(calls, 3);
+});
+
 test("private video is not retried and invalid input never starts a process", async (t) => {
   let calls = 0;
   const f = await fixture(t, { async run() { calls++; throw new Error("Private video"); } });

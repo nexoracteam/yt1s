@@ -8,7 +8,7 @@ import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromIn
 import { streamArgs, streamMedia } from "./stream-download.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE"]);
+const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DOWNLOAD_FAILED"]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
