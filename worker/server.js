@@ -57,6 +57,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
       // YouTube applies different bot/PO-token checks to each player client. Rotate
       // bounded, known-compatible clients before trying the optional cookie session.
       const strategies = [
+        { name: "pot-web", playerClients: "mweb,tv,web_safari" },
         { name: "tv-safari", playerClients: "tv,web_safari" },
         { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
         { name: "default" },
@@ -66,6 +67,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
       for (let attempt = 0; attempt < strategies.length; attempt++) {
         await mkdir(jobDir, { recursive: true });
         let cookiePath;
+        let stage = "extract";
         try {
           job.attempt = attempt + 1;
           job.status = attempt ? "retrying" : "checking";
@@ -82,6 +84,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.duration = Number(info.duration || 0);
           job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
           streamArgs(info, job.quality);
+          stage = "probe";
           await probe(info);
           const estimate = Number(info.filesize || info.filesize_approx || 0);
           if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
@@ -90,7 +93,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           break;
         } catch (error) {
           const code = failureCode(error);
-          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, code }));
+          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code }));
           if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) throw error;
           job.status = "retrying";
           await wait(1500 * (attempt + 1));
@@ -124,12 +127,16 @@ export async function createWorker({ env = process.env, directory = path.join(__
     }
   }
 
-  app.get("/health", (req, res) => res.json({
-    ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v3",
-    cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available,
-    proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
-    prepareConcurrency, streamConcurrency, maxQueue
-  }));
+  app.get("/health", async (req, res) => {
+    const poTokenProvider = await fetch("http://127.0.0.1:4416/ping", { signal: AbortSignal.timeout(2000) })
+      .then((response) => response.ok).catch(() => false);
+    res.json({
+      ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
+      cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, poTokenProvider,
+      proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      prepareConcurrency, streamConcurrency, maxQueue
+    });
+  });
 
   app.post("/download", requireSecret, (req, res) => {
     const videoId = videoIdFromInput(req.body?.url);
