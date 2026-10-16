@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createWorker } from "./server.js";
 import { runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
-import { streamArgs, mediaUrl } from "./stream-download.js";
+import { streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
 
@@ -118,7 +118,7 @@ test("yt-dlp strategies can select alternate YouTube clients without leaking con
 
 test("HD streaming merges separate tracks to stdout, never a disk file", () => {
   const args = streamArgs({ requested_formats: [
-    { url: "https://rr1.googlevideo.com/video", vcodec: "avc1", acodec: "none" },
+    { url: "https://rr1.googlevideo.com/video", vcodec: "avc1", acodec: "none", http_headers: { "user-agent": "client", "X-YouTube-Client-Name": "28", Host: "blocked", Bad: "x\r\ny" } },
     { url: "https://rr1.googlevideo.com/audio", vcodec: "none", acodec: "mp4a.40.2" }
   ] }, "1080p");
   assert.equal(args.at(-1), "pipe:1");
@@ -127,6 +127,11 @@ test("HD streaming merges separate tracks to stdout, never a disk file", () => {
   assert.equal(args[args.indexOf("-c:v") + 1], "copy");
   assert.equal(args[args.indexOf("-c:a") + 1], "copy");
   assert.ok(args.includes("+frag_keyframe+empty_moov+default_base_moof"));
+  const forwardedHeaders = args[args.indexOf("-headers") + 1];
+  assert.match(forwardedHeaders, /user-agent: client/);
+  assert.match(forwardedHeaders, /X-YouTube-Client-Name: 28/);
+  assert.doesNotMatch(forwardedHeaders, /Host|Bad/);
+  assert.equal(mediaHeaders({ Connection: "close", Accept: "*/*" }), "Accept: */*\r\n");
   assert.equal(mediaUrl("http://127.0.0.1/admin"), "");
   assert.equal(mediaUrl("https://googlevideo.com.evil.test/file"), "");
   assert.throws(() => streamArgs({url:"file:///etc/passwd"}, "720p"), {code:"FORMAT_UNAVAILABLE"});
