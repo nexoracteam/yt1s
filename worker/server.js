@@ -5,14 +5,14 @@ import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import { DownloadError, failureCode, publicFailure } from "./download-errors.js";
 import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
-import { streamArgs, streamMedia } from "./stream-download.js";
+import { probeMedia, streamArgs, streamMedia } from "./stream-download.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DOWNLOAD_FAILED"]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, stream = streamMedia, wait = sleep, log = console.log } = {}) {
+  run = runCommand, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
@@ -82,6 +82,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.duration = Number(info.duration || 0);
           job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
           streamArgs(info, job.quality);
+          await probe(info);
           const estimate = Number(info.filesize || info.filesize_approx || 0);
           if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
           job.estimatedBytes = estimate;

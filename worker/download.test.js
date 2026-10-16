@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createWorker } from "./server.js";
 import { runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
-import { streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
+import { probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
 
 async function fixture(t, options) {
   const directory = await mkdtemp(path.join(tmpdir(), "yt1s-test-"));
-  const app = await createWorker({ directory, env: { YOUTUBE_COOKIES: cookie("initial") }, wait: async () => {}, log: () => {}, ...options });
+  const app = await createWorker({ directory, env: { YOUTUBE_COOKIES: cookie("initial") }, probe: async () => {}, wait: async () => {}, log: () => {}, ...options });
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
@@ -87,6 +87,23 @@ test("unknown extractor failures continue through the bounded client fallbacks",
   assert.equal(calls, 3);
 });
 
+test("unplayable extracted media URLs fall through to the next client", async (t) => {
+  let probes = 0;
+  const f = await fixture(t, {
+    async run() {
+      return { stdout: JSON.stringify({ title: "Video", duration: 20, height: 720, availability: "public", url: "https://example.googlevideo.com/video", vcodec: "avc1", acodec: "mp4a" }) };
+    },
+    async probe() {
+      probes++;
+      if (probes === 1) throw Object.assign(new Error("blocked"), { code: "SOURCE_BUSY" });
+    }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.attempt, 2);
+  assert.equal(probes, 2);
+});
+
 test("private video is not retried and invalid input never starts a process", async (t) => {
   let calls = 0;
   const f = await fixture(t, { async run() { calls++; throw new Error("Private video"); } });
@@ -135,4 +152,13 @@ test("HD streaming merges separate tracks to stdout, never a disk file", () => {
   assert.equal(mediaUrl("http://127.0.0.1/admin"), "");
   assert.equal(mediaUrl("https://googlevideo.com.evil.test/file"), "");
   assert.throws(() => streamArgs({url:"file:///etc/passwd"}, "720p"), {code:"FORMAT_UNAVAILABLE"});
+});
+
+test("media probe rejects upstream 403 before returning a broken link", async () => {
+  await assert.rejects(probeMedia({ url: "https://rr1.googlevideo.com/video" }, {
+    fetcher: async (url, options) => {
+      assert.equal(options.headers.Range, "bytes=0-0");
+      return { ok: false, status: 403, body: { cancel: async () => {} } };
+    }
+  }), { code: "SOURCE_BUSY" });
 });

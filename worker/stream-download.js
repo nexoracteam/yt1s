@@ -8,16 +8,36 @@ export function mediaUrl(value) {
   } catch { return ""; }
 }
 
-export function mediaHeaders(value) {
-  if (!value || typeof value !== "object") return "";
+export function mediaHeaderEntries(value) {
+  if (!value || typeof value !== "object") return [];
   const blocked = new Set(["host", "content-length", "connection", "transfer-encoding"]);
   return Object.entries(value)
     .filter(([key, headerValue]) => /^[A-Za-z0-9-]+$/.test(key)
       && !blocked.has(key.toLowerCase())
       && typeof headerValue === "string"
-      && !/[\r\n]/.test(headerValue))
-    .map(([key, headerValue]) => `${key}: ${headerValue}\r\n`)
-    .join("");
+      && !/[\r\n]/.test(headerValue));
+}
+
+export function mediaHeaders(value) {
+  return mediaHeaderEntries(value).map(([key, headerValue]) => `${key}: ${headerValue}\r\n`).join("");
+}
+
+export async function probeMedia(info, { fetcher = fetch, timeoutMs = 15000 } = {}) {
+  const inputs = info.requested_formats || [info];
+  for (const input of inputs) {
+    const url = mediaUrl(input.url);
+    if (!url) throw new DownloadError("FORMAT_UNAVAILABLE");
+    const headers = Object.fromEntries(mediaHeaderEntries(input.http_headers || info.http_headers));
+    headers.Range = "bytes=0-0";
+    let response;
+    try {
+      response = await fetcher(url, { headers, redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
+    } catch {
+      throw new DownloadError("SOURCE_BUSY");
+    }
+    await response.body?.cancel().catch(() => {});
+    if (!response.ok) throw new DownloadError(response.status === 403 || response.status === 429 ? "SOURCE_BUSY" : "DOWNLOAD_FAILED");
+  }
 }
 
 function streamFailure(stderr) {
