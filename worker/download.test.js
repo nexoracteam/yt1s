@@ -49,14 +49,14 @@ test("recovers from anonymous block, preserves rotated cookies, caches canonical
   const started = await f.start();
   const job = await f.finish(started.jobId);
   assert.equal(job.status, "completed");
-  assert.equal(job.attempt, 2);
+  assert.equal(job.attempt, 3);
   assert.match(job.downloadUrl, /\/stream\/.*\?token=/);
   assert.ok(job.expiresAt);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /rotated/);
   const again = await f.start("https://www.youtube.com/watch?v=RpJ4UWDjyeU&feature=share");
   assert.equal(again.cached, true);
   assert.equal(again.jobId, started.jobId);
-  assert.equal(extractions, 2);
+  assert.equal(extractions, 3);
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.deepEqual(await readdir(f.directory), ["session-cookies.txt"]);
 });
@@ -67,7 +67,7 @@ test("bounded retries never leak internal errors and failure does not remove coo
   const job = await f.finish((await f.start()).jobId);
   assert.equal(job.status, "failed");
   assert.equal(job.code, "SOURCE_BUSY");
-  assert.equal(calls, 6);
+  assert.equal(calls, 7);
   assert.doesNotMatch(JSON.stringify(job), /Railway|YOUTUBE_COOKIES|secret-value|429/);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /initial/);
 });
