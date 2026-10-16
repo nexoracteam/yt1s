@@ -4,7 +4,7 @@ import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createWorker } from "./server.js";
-import { runCommand, videoIdFromInput, formatSelector } from "./download-support.js";
+import { runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { streamArgs, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -49,14 +49,14 @@ test("recovers from anonymous block, preserves rotated cookies, caches canonical
   const started = await f.start();
   const job = await f.finish(started.jobId);
   assert.equal(job.status, "completed");
-  assert.equal(job.attempt, 2);
+  assert.equal(job.attempt, 4);
   assert.match(job.downloadUrl, /\/stream\/.*\?token=/);
   assert.ok(job.expiresAt);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /rotated/);
   const again = await f.start("https://www.youtube.com/watch?v=RpJ4UWDjyeU&feature=share");
   assert.equal(again.cached, true);
   assert.equal(again.jobId, started.jobId);
-  assert.equal(extractions, 2);
+  assert.equal(extractions, 4);
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.deepEqual(await readdir(f.directory), ["session-cookies.txt"]);
 });
@@ -67,7 +67,7 @@ test("bounded retries never leak internal errors and failure does not remove coo
   const job = await f.finish((await f.start()).jobId);
   assert.equal(job.status, "failed");
   assert.equal(job.code, "SOURCE_BUSY");
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   assert.doesNotMatch(JSON.stringify(job), /Railway|YOUTUBE_COOKIES|secret-value|429/);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /initial/);
 });
@@ -92,6 +92,13 @@ test("quality selection and strict video URL parsing", () => {
   assert.match(formatSelector("1080p"), /^best\[height=1080\]/);
   assert.equal(videoIdFromInput("https://youtube.com.evil.test/watch?v=RpJ4UWDjyeU"), "");
   assert.equal(videoIdFromInput("https://youtube.com/shorts/RpJ4UWDjyeU"), "RpJ4UWDjyeU");
+});
+
+test("yt-dlp strategies can select alternate YouTube clients without leaking config", () => {
+  const args = ytDlpArgs({ playerClients: "tv,web_safari" });
+  assert.equal(args[args.indexOf("--extractor-args") + 1], "youtube:player_client=tv,web_safari");
+  assert.ok(args.includes("--no-cookies"));
+  assert.ok(args.includes("--sleep-requests"));
 });
 
 test("HD streaming merges separate tracks to stdout, never a disk file", () => {

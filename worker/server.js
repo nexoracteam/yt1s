@@ -54,8 +54,14 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const url = `https://www.youtube.com/watch?v=${job.videoId}`;
     const startedAt = Date.now();
     try {
-      // Anonymous first: a stale login session must not break public video downloads.
-      const strategies = cookies.available ? ["anonymous", "cookies", "anonymous"] : ["anonymous", "anonymous"];
+      // YouTube applies different bot/PO-token checks to each player client. Rotate
+      // bounded, known-compatible clients before trying the optional cookie session.
+      const strategies = [
+        { name: "tv-safari", playerClients: "tv,web_safari" },
+        { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
+        { name: "default" },
+        ...(cookies.available ? [{ name: "cookies", playerClients: "web_safari,web_creator", cookies: true }] : [])
+      ];
       let selectedInfo;
       for (let attempt = 0; attempt < strategies.length; attempt++) {
         await mkdir(jobDir, { recursive: true });
@@ -63,8 +69,9 @@ export async function createWorker({ env = process.env, directory = path.join(__
         try {
           job.attempt = attempt + 1;
           job.status = attempt ? "retrying" : "checking";
-          if (strategies[attempt] === "cookies") cookiePath = await cookies.checkout(jobDir);
-          const args = ytDlpArgs({ cookiePath, proxy: env.YTDLP_PROXY });
+          const strategy = strategies[attempt];
+          if (strategy.cookies) cookiePath = await cookies.checkout(jobDir);
+          const args = ytDlpArgs({ cookiePath, proxy: env.YTDLP_PROXY, playerClients: strategy.playerClients });
           const { stdout } = await run("yt-dlp", [...args, "--dump-single-json", "--skip-download", "-f", formatSelector(job.quality), url]);
           const info = JSON.parse(stdout);
           if (info.is_live || info.live_status === "is_upcoming") throw new DownloadError("LIVE_VIDEO");
@@ -82,7 +89,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           break;
         } catch (error) {
           const code = failureCode(error);
-          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt], code }));
+          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, code }));
           if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) throw error;
           job.status = "retrying";
           await wait(1500 * (attempt + 1));

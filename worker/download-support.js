@@ -64,11 +64,11 @@ export async function createCookieStore(directory, env) {
   };
 }
 
-export function ytDlpArgs({ cookiePath, proxy }) {
+export function ytDlpArgs({ cookiePath, proxy, playerClients }) {
   const args = ["--ignore-config", "--no-playlist", "--force-ipv4", "--socket-timeout", "30",
     "--retries", "4", "--fragment-retries", "4", "--extractor-retries", "2",
-    "--js-runtimes", `node:${process.execPath}`];
-  // Use the maintained default clients from the installed yt-dlp version.
+    "--sleep-requests", "1", "--js-runtimes", `node:${process.execPath}`];
+  if (playerClients) args.push("--extractor-args", `youtube:player_client=${playerClients}`);
   if (cookiePath) args.push("--cookies", cookiePath);
   else args.push("--no-cookies");
   if (proxy) args.push("--proxy", proxy);
