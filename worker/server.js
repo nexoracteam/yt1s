@@ -57,7 +57,8 @@ export async function createWorker({ env = process.env, directory = path.join(__
       // YouTube applies different bot/PO-token checks to each player client. Rotate
       // bounded, known-compatible clients before trying the optional cookie session.
       const strategies = [
-        { name: "pot-web", playerClients: "mweb,tv,web_safari" },
+        { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" },
+        ...(cookies.available ? [{ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true }] : []),
         { name: "tv-safari", playerClients: "tv,web_safari" },
         { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
         { name: "default" },
@@ -73,7 +74,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.status = attempt ? "retrying" : "checking";
           const strategy = strategies[attempt];
           if (strategy.cookies) cookiePath = await cookies.checkout(jobDir);
-          const args = ytDlpArgs({ cookiePath, proxy: env.YTDLP_PROXY, playerClients: strategy.playerClients });
+          const args = ytDlpArgs({ cookiePath, proxy: env.YTDLP_PROXY, playerClients: strategy.playerClients, playerSkip: strategy.playerSkip });
           const { stdout } = await run("yt-dlp", [...args, "--dump-single-json", "--skip-download", "-f", formatSelector(job.quality), url]);
           const info = JSON.parse(stdout);
           if (info.is_live || info.live_status === "is_upcoming") throw new DownloadError("LIVE_VIDEO");

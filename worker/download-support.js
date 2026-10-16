@@ -64,11 +64,12 @@ export async function createCookieStore(directory, env) {
   };
 }
 
-export function ytDlpArgs({ cookiePath, proxy, playerClients }) {
+export function ytDlpArgs({ cookiePath, proxy, playerClients, playerSkip }) {
   const args = ["--ignore-config", "--no-playlist", "--socket-timeout", "30",
     "--retries", "4", "--fragment-retries", "4", "--extractor-retries", "2",
     "--sleep-requests", "1", "--js-runtimes", `node:${process.execPath}`];
-  if (playerClients) args.push("--extractor-args", `youtube:player_client=${playerClients}`);
+  const extractorArgs = [playerClients && `player_client=${playerClients}`, playerSkip && `player_skip=${playerSkip}`].filter(Boolean).join(";");
+  if (extractorArgs) args.push("--extractor-args", `youtube:${extractorArgs}`);
   if (cookiePath) args.push("--cookies", cookiePath);
   else args.push("--no-cookies");
   if (proxy) args.push("--proxy", proxy);
