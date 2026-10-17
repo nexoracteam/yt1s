@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    return [{
+      source: "/:path*",
+      has: [{ type: "host", value: "www.yt1s.video" }],
+      destination: "https://yt1s.video/:path*",
+      permanent: true
+    }];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "i.ytimg.com" },

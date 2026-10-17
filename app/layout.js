@@ -5,7 +5,7 @@ import CookieConsent from "../components/CookieConsent";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import JsonLd from "../components/JsonLd";
-import { brand, seoKeywords } from "../lib/tools";
+import { brand } from "../lib/tools";
 import { organizationSchema, siteUrl, websiteSchema } from "../lib/seo";
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
@@ -19,8 +19,7 @@ export const metadata = {
     default: "YT1s YouTube Downloader - MP4, Audio, Shorts & HD | yt1s.video",
     template: "%s | yt1s.video"
   },
-  description: "yt1s.video is a fast yt1s YouTube downloader for public videos, Shorts, full HD MP4 links, 4K-ready formats, thumbnails and audio tools.",
-  keywords: [...seoKeywords, "youtube shorts downloader", "youtube to mp3", "youtube thumbnail downloader", "download youtube video"],
+  description: brand.description,
   verification: {
     google: googleSiteVerification
   },

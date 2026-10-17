@@ -36,7 +36,6 @@ export default async function BlogPostPage({ params }) {
           <Link href="/" className="hover:text-flame">Home</Link> <span>/</span> <Link href="/blog" className="hover:text-flame">Blog</Link>
         </nav>
         <header className="mt-8 rounded-[2rem] bg-white p-6 shadow-2xl shadow-orange-100/80 dark:bg-zinc-900 dark:shadow-none sm:p-10">
-          <p className="font-black uppercase tracking-[0.3em] text-flame">SEO guide</p>
           <h1 className="mt-4 font-display text-4xl font-black tracking-tight text-ink dark:text-white sm:text-6xl">{post.title}</h1>
           <p className="mt-6 text-lg leading-8 text-gray-600 dark:text-gray-300">{post.description}</p>
           <div className="mt-6 flex flex-wrap gap-2 text-xs font-bold text-gray-500 dark:text-gray-400">
@@ -52,7 +51,7 @@ export default async function BlogPostPage({ params }) {
         </header>
 
         <section className="mt-10 rounded-[2rem] border border-orange-100 bg-orange-50/70 p-6 dark:border-white/10 dark:bg-zinc-900/70 sm:p-8">
-          <h2 className="text-2xl font-black text-ink dark:text-white">Quick internal links</h2>
+          <h2 className="text-2xl font-black text-ink dark:text-white">Choose a download tool</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {post.relatedTools.map((tool) => (
               <Link key={tool.href} href={tool.href} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm font-black text-gray-700 shadow-sm hover:bg-flame hover:text-white dark:bg-zinc-950 dark:text-gray-200 dark:hover:bg-flame">

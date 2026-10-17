@@ -1,6 +1,4 @@
-import { brand, seoKeywords } from "../lib/tools";
-
-const keywordLine = seoKeywords.join(", ");
+import { brand } from "../lib/tools";
 
 export function SeoContent({ tool, home = false }) {
   const title = tool?.title || "YouTube Video Downloader";
@@ -11,25 +9,28 @@ export function SeoContent({ tool, home = false }) {
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <article className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none sm:p-10">
-        <p className="font-black uppercase tracking-[0.28em] text-flame">SEO guide</p>
         <h2 className="mt-3 text-3xl font-black tracking-tight text-ink dark:text-white sm:text-4xl">
           {tool?.seoTitle || "A smooth downloader experience for public YouTube videos, Shorts and audio"}
         </h2>
         <div className="mt-6 space-y-6 text-sm leading-7 text-gray-600 dark:text-gray-300 sm:text-base sm:leading-8">
-          <p>{intro} The goal is simple: paste a link, choose a format, prepare a direct stream, and keep the page responsive on phones, tablets and desktops. This page naturally supports searches such as {keywordLine}, while still explaining the product in normal language instead of repeating keywords without context.</p>
+          <p>{intro}</p>
           {sections.map(([heading, body]) => (
             <section key={heading}>
               <h3 className="text-xl font-black text-ink dark:text-white">{heading}</h3>
               <p className="mt-2">{body}</p>
             </section>
           ))}
-          <p>A good YouTube video downloader should make the first step obvious. The input field accepts a video URL, a Shorts URL, or a valid video ID. The quality selector shows common MP4 options such as 360p, 480p, 720p HD and 1080p full HD when the source can provide them. Audio delivery is handled as M4A because it is widely supported and avoids pretending that every source can be converted to true MP3 instantly. If a format is not available from the source, the interface guides the user back to another option instead of trapping them in a broken loader.</p>
-          <p>For mobile users, the form is intentionally stacked: the URL field gets the full width, the paste button stays inside the control, and the format dropdown plus download button are large enough to tap comfortably. On desktop, the same controls align into a compact row so the journey still feels fast. Smooth transitions, clear focus states, and reduced-motion support help the page feel polished without making it heavy. The loader explains what is happening while the system prepares a stream, and the completed state provides a direct download action.</p>
-          <p>The current delivery model avoids the older problem of downloading the entire video to the server and then uploading it to cloud storage before the user can save it. Instead, the worker prepares a short-lived stream link and delivers media to the user device when the browser opens that link. This removes upload waiting time, avoids local server video storage, and keeps large files away from Cloudinary limits. It also means final transfer speed depends on the source, the worker network and the user connection, so no page should promise impossible instant downloads for every video.</p>
-          <p>The user journey stays focused on the task. There are no third-party promotion loaders, popups, sidebar rails, or paid placement blocks interrupting the downloader form. The page layout is designed around the input, status messages, helpful content, and internal navigation so visitors can understand the tool without competing calls to action.</p>
-          <p>Search engines need more than a tool form. They need helpful content, canonical URLs, structured data, robots and sitemap files, legal pages and clear contact details. This site includes WebSite, Organization, WebApplication, FAQ and ItemList schema where relevant. It also includes privacy, terms, DMCA, contact, cookie policy, security.txt and llms.txt routes. Those signals help crawlers understand the purpose of the website and reduce thin-page risk across downloader pages.</p>
-          <p>Responsible use matters. yt1s.video is intended for content you own, have permission to use, or are legally allowed to access. The tool does not grant rights to reuse another creator&apos;s work, bypass copyright, or violate platform rules. If a video is private, restricted, unavailable, blocked by the source, or too large for a selected workflow, the page should explain the issue in safe public language without exposing internal credentials, worker details or platform error messages.</p>
-          <p>Creators, students, editors and marketers often use tools like this for previews, backups of their own videos, thumbnail research, Shorts workflows, draft metadata, timestamps and quick audio reference files. A quality downloader page should respect that workflow by staying fast, readable and predictable. That is why this page combines a simple form, clear status messages, stable spacing, legal transparency, and structured content designed for both human visitors and search engines.</p>
+          {(home || tool?.mode === "download") && <>
+            <section>
+              <h3 className="text-xl font-black text-ink dark:text-white">If your download does not start</h3>
+              <p className="mt-2">Check that the video is public and still available on YouTube. Try a lower quality if the selected format fails. Private, removed, live or region-restricted videos may not be supported. Current limits are 30 minutes and 500 MB per download.</p>
+            </section>
+            <section>
+              <h3 className="text-xl font-black text-ink dark:text-white">Save the file before the link expires</h3>
+              <p className="mt-2">Prepared links are temporary. If a link expires, paste the original video URL again to prepare a new one. On a phone, check your browser downloads or Files app for the saved MP4 or M4A file.</p>
+            </section>
+          </>}
+          <p>Only process content you own, have permission to use, or are legally allowed to access. Downloading a file does not grant permission to republish it.</p>
         </div>
       </article>
     </section>
