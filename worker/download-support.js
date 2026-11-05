@@ -23,7 +23,7 @@ export function videoIdFromInput(input) {
 }
 
 export function formatSelector(quality) {
-  if (quality === "audio") return "bestaudio[ext=m4a]/bestaudio";
+  if (quality === "audio") return "bestaudio[ext=m4a]/bestaudio/18/best";
   const height = Number(quality.replace("p", ""));
   // Prefer combined streams only at the requested height, not 360p for every quality.
   return `best[height=${height}][ext=mp4]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]`;
