@@ -59,12 +59,16 @@ export function streamArgs(info, quality) {
     if (headers) args.push("-headers", headers);
     args.push("-i", url);
   }
-  if (quality === "audio") args.push("-map", "0:a:0", "-vn", "-c:a", info.acodec?.startsWith("mp4a") ? "copy" : "aac");
+  if (quality === "audio") {
+    const copy = info.acodec?.startsWith("mp4a");
+    args.push("-map", "0:a:0", "-vn", "-c:a", copy ? "copy" : "aac", ...(copy ? ["-bsf:a", "aac_adtstoasc"] : []));
+  }
   else {
     const video = inputs.findIndex((item) => item.vcodec && item.vcodec !== "none");
     const audio = inputs.findIndex((item) => item.acodec && item.acodec !== "none");
     if (video < 0 || audio < 0) throw new DownloadError("FORMAT_UNAVAILABLE");
-    args.push("-map", `${video}:v:0`, "-map", `${audio}:a:0`, "-c:v", "copy", "-c:a", inputs[audio].acodec?.startsWith("mp4a") ? "copy" : "aac");
+    const copyAudio = inputs[audio].acodec?.startsWith("mp4a");
+    args.push("-map", `${video}:v:0`, "-map", `${audio}:a:0`, "-c:v", "copy", "-c:a", copyAudio ? "copy" : "aac", ...(copyAudio ? ["-bsf:a", "aac_adtstoasc"] : []));
   }
   return [...args, "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"];
 }
