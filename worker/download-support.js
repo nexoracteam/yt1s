@@ -38,29 +38,63 @@ export function validCookies(text, now = Date.now() / 1000) {
     && rows.some((row) => /(^|\.)youtube\.com$/.test(row[0]) && (!Number(row[4]) || Number(row[4]) > now));
 }
 
-export async function createCookieStore(directory, env) {
-  const masterPath = path.join(directory, "session-cookies.txt");
-  const text = (env.YOUTUBE_COOKIES_B64
-    ? Buffer.from(env.YOUTUBE_COOKIES_B64, "base64").toString("utf8")
-    : env.YOUTUBE_COOKIES || "").replace(/^\uFEFF/, "");
-  const configured = Boolean(text);
-  const available = configured && validCookies(text);
-  if (available) await writeFile(masterPath, text, { mode: 0o600 });
+const COOLDOWN_MS = 30 * 60 * 1000;
+
+function cookieTexts(env) {
+  // YOUTUBE_COOKIES_B64 is account 1; YOUTUBE_COOKIES_B64_2, _3, ... add more accounts.
+  const texts = [];
+  for (let index = 1; index <= 10; index++) {
+    const suffix = index === 1 ? "" : `_${index}`;
+    const encoded = env[`YOUTUBE_COOKIES_B64${suffix}`];
+    const plain = env[`YOUTUBE_COOKIES${suffix}`];
+    const text = (encoded ? Buffer.from(encoded, "base64").toString("utf8") : plain || "").replace(/^\uFEFF/, "");
+    if (text) texts.push({ index, text });
+  }
+  return texts;
+}
+
+export async function createCookieStore(directory, env, now = () => Date.now()) {
+  const accounts = [];
+  const configuredTexts = cookieTexts(env);
+  for (const { index, text } of configuredTexts) {
+    if (!validCookies(text)) continue;
+    const masterPath = path.join(directory, index === 1 ? "session-cookies.txt" : `session-cookies-${index}.txt`);
+    await writeFile(masterPath, text, { mode: 0o600 });
+    accounts.push({ index, masterPath, blockedUntil: 0 });
+  }
+  const leases = new Map();
+  let cursor = 0;
+  const usable = () => accounts.filter((account) => account.blockedUntil <= now());
   return {
-    configured, available,
+    configured: configuredTexts.length > 0,
+    available: accounts.length > 0,
+    accounts: accounts.length,
+    // Accounts not cooling down after a bot block.
+    healthy: () => usable().length,
     async checkout(jobDirectory) {
-      if (!available) return null;
+      if (!accounts.length) return null;
+      // Round-robin across healthy accounts; if all are cooling down, still try the least recently blocked.
+      const pool = usable().length ? usable() : [...accounts].sort((x, y) => x.blockedUntil - y.blockedUntil).slice(0, 1);
+      const account = pool[cursor++ % pool.length];
       const cookiePath = path.join(jobDirectory, "cookies.txt");
-      await writeFile(cookiePath, await readFile(masterPath), { mode: 0o600 });
+      await writeFile(cookiePath, await readFile(account.masterPath), { mode: 0o600 });
+      leases.set(cookiePath, account);
       return cookiePath;
     },
     async save(cookiePath) {
-      // Jobs are serialized. Preserve refreshed cookies rather than resetting from env on every request.
+      const account = leases.get(cookiePath) || accounts[0];
+      if (!account) return;
+      // Jobs may overlap across accounts but never share an account file path; keep refreshed cookies.
       const updated = await readFile(cookiePath, "utf8").catch(() => "");
       if (!validCookies(updated)) return;
-      await writeFile(`${masterPath}.tmp`, updated, { mode: 0o600 });
-      await rename(`${masterPath}.tmp`, masterPath);
-    }
+      await writeFile(`${account.masterPath}.tmp`, updated, { mode: 0o600 });
+      await rename(`${account.masterPath}.tmp`, account.masterPath);
+    },
+    markBlocked(cookiePath) {
+      const account = leases.get(cookiePath);
+      if (account) account.blockedUntil = now() + COOLDOWN_MS;
+    },
+    release(cookiePath) { leases.delete(cookiePath); }
   };
 }
 

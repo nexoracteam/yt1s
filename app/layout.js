@@ -16,7 +16,7 @@ const googleSiteVerification = "KGQZY9TuxjDpCHzABv7mXt1cJ8e580-KG-Evsybccp4";
 export const metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "YT1s YouTube Downloader - MP4, Audio, Shorts & HD | yt1s.video",
+    default: "YT1s Video Downloader - YouTube to MP4 & Audio | yt1s.video",
     template: "%s | yt1s.video"
   },
   description: brand.description,
@@ -27,7 +27,7 @@ export const metadata = {
     canonical: siteUrl
   },
   openGraph: {
-    title: "YT1s YouTube Downloader - MP4, Audio, Shorts & HD",
+    title: "YT1s Video Downloader - YouTube to MP4 & Audio",
     description: brand.description,
     url: siteUrl,
     siteName: brand.name,

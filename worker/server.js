@@ -58,8 +58,9 @@ export async function createWorker({ env = process.env, directory = path.join(__
       // bounded, known-compatible clients before trying the optional cookie session.
       // With a cookie session, the cookie strategy is the one that works from a datacenter IP,
       // so try it first instead of burning ~25s on strategies that YouTube bot-blocks.
+      // With several accounts, a second cookie attempt rotates to a different account.
       const cookieStrategies = cookies.available
-        ? [{ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true }] : [];
+        ? Array.from({ length: Math.min(cookies.accounts, 2) }, () => ({ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true })) : [];
       const strategies = [
         ...cookieStrategies,
         { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
@@ -99,12 +100,13 @@ export async function createWorker({ env = process.env, directory = path.join(__
           break;
         } catch (error) {
           const code = failureCode(error);
+          if (cookiePath && code === "SOURCE_BUSY") cookies.markBlocked(cookiePath);
           log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code }));
           if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) throw error;
           job.status = "retrying";
           await wait(1500 * (attempt + 1));
         } finally {
-          if (cookiePath) await cookies.save(cookiePath).catch(() => {});
+          if (cookiePath) { await cookies.save(cookiePath).catch(() => {}); cookies.release?.(cookiePath); }
           await rm(jobDir, { recursive: true, force: true });
         }
       }
@@ -138,7 +140,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
       .then((response) => response.ok).catch(() => false);
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
-      cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, poTokenProvider,
+      cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
       proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });

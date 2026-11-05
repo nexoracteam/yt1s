@@ -4,7 +4,7 @@ import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createWorker } from "./server.js";
-import { runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
+import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -161,4 +161,28 @@ test("media probe rejects upstream 403 before returning a broken link", async ()
       return { ok: false, status: 403, body: { cancel: async () => {} } };
     }
   }), { code: "SOURCE_BUSY" });
+});
+
+test("cookie accounts rotate round-robin and a blocked account cools down", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "yt1s-pool-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let clock = 1000;
+  const env = { YOUTUBE_COOKIES: cookie("one"), YOUTUBE_COOKIES_2: cookie("two") };
+  const store = await createCookieStore(directory, env, () => clock);
+  assert.equal(store.accounts, 2);
+  const seen = [];
+  for (let i = 0; i < 4; i++) {
+    const jobDir = path.join(directory, `job${i}`);
+    await (await import("node:fs/promises")).mkdir(jobDir);
+    const file = await store.checkout(jobDir);
+    seen.push((await readFile(file, "utf8")).includes("one") ? 1 : 2);
+  }
+  assert.deepEqual(seen, [1, 2, 1, 2]);
+  const blockedDir = path.join(directory, "blocked");
+  await (await import("node:fs/promises")).mkdir(blockedDir);
+  const blocked = await store.checkout(blockedDir);
+  store.markBlocked(blocked);
+  assert.equal(store.healthy(), 1);
+  clock += 31 * 60 * 1000;
+  assert.equal(store.healthy(), 2);
 });

@@ -39,7 +39,7 @@ export default function Home() {
             <ShieldCheck className="h-4 w-4" /> Free · No signup · No popups
           </p>
           <h1 className="mt-5 font-display text-4xl font-black tracking-tight text-ink dark:text-white sm:text-6xl">
-            YT1s YouTube Video Downloader
+            YT1s Video Downloader
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-gray-600 dark:text-gray-300 sm:text-lg sm:leading-8">
             Paste a public YouTube link, pick a quality and save it as MP4 or M4A audio with {brand.name}. Up to 1080p when available.
