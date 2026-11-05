@@ -70,7 +70,9 @@ export function streamArgs(info, quality) {
     const copyAudio = inputs[audio].acodec?.startsWith("mp4a");
     args.push("-map", `${video}:v:0`, "-map", `${audio}:a:0`, "-c:v", "copy", "-c:a", copyAudio ? "copy" : "aac", ...(copyAudio ? ["-bsf:a", "aac_adtstoasc"] : []));
   }
-  return [...args, "-movflags", "+frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"];
+  // Audio-only fragments per packet (frag_keyframe) produce undecodable files on a pipe; fragment by duration instead.
+  const fragment = quality === "audio" ? ["-frag_duration", "2000000", "-movflags", "+empty_moov+default_base_moof"] : ["-movflags", "+frag_keyframe+empty_moov+default_base_moof"];
+  return [...args, ...fragment, "-f", "mp4", "pipe:1"];
 }
 
 export function streamMedia(req, res, info, quality, { maxBytes, spawnProcess = spawn, log = console.log } = {}) {
