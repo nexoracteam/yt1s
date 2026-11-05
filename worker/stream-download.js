@@ -60,8 +60,8 @@ export function streamArgs(info, quality) {
     args.push("-i", url);
   }
   if (quality === "audio") {
-    const copy = info.acodec?.startsWith("mp4a");
-    args.push("-map", "0:a:0", "-vn", "-c:a", copy ? "copy" : "aac", ...(copy ? ["-bsf:a", "aac_adtstoasc"] : []));
+    // Re-encode: stream-copying HE-AAC from muxed/HLS sources yields undecodable audio.
+    args.push("-map", "0:a:0", "-vn", "-c:a", "aac", "-b:a", "192k");
   }
   else {
     const video = inputs.findIndex((item) => item.vcodec && item.vcodec !== "none");
