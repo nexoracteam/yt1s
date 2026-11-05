@@ -56,10 +56,14 @@ export async function createWorker({ env = process.env, directory = path.join(__
     try {
       // YouTube applies different bot/PO-token checks to each player client. Rotate
       // bounded, known-compatible clients before trying the optional cookie session.
+      // With a cookie session, the cookie strategy is the one that works from a datacenter IP,
+      // so try it first instead of burning ~25s on strategies that YouTube bot-blocks.
+      const cookieStrategies = cookies.available
+        ? [{ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true }] : [];
       const strategies = [
+        ...cookieStrategies,
         { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
         { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" },
-        ...(cookies.available ? [{ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true }] : []),
         { name: "tv-safari", playerClients: "tv,web_safari" },
         { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
         { name: "default" },

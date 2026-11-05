@@ -49,14 +49,14 @@ test("recovers from anonymous block, preserves rotated cookies, caches canonical
   const started = await f.start();
   const job = await f.finish(started.jobId);
   assert.equal(job.status, "completed");
-  assert.equal(job.attempt, 3);
+  assert.equal(job.attempt, 1);
   assert.match(job.downloadUrl, /\/stream\/.*\?token=/);
   assert.ok(job.expiresAt);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /rotated/);
   const again = await f.start("https://www.youtube.com/watch?v=RpJ4UWDjyeU&feature=share");
   assert.equal(again.cached, true);
   assert.equal(again.jobId, started.jobId);
-  assert.equal(extractions, 3);
+  assert.equal(extractions, 1);
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.deepEqual(await readdir(f.directory), ["session-cookies.txt"]);
 });

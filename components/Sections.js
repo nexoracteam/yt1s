@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, DownloadCloud, Layers3, ShieldCheck, Zap } from "lucide-react";
-import { defaultFaqs, defaultHowToSteps, toolCategories, tools } from "../lib/tools";
+import { defaultFaqs, defaultHowToSteps, isIndexable, toolCategories, tools } from "../lib/tools";
 import Reveal from "./Reveal";
 
 export function HowItWorks({ tool } = {}) {
@@ -52,7 +52,7 @@ export function ToolDirectory() {
           <div key={category.title} className="rounded-[2rem] border border-orange-100 bg-white p-6 shadow-xl shadow-orange-100/70 dark:border-white/10 dark:bg-zinc-900 dark:shadow-none">
             <h3 className="text-xl font-black text-ink dark:text-white">{category.title}</h3>
             <div className="mt-5 space-y-3">
-              {category.tools.map((slug) => (
+              {category.tools.filter(isIndexable).map((slug) => (
                 <Link key={slug} href={`/${slug}`} className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950 hover:bg-flame hover:text-white dark:bg-zinc-800 dark:text-orange-50 dark:hover:bg-flame">
                   {tools[slug].title}
                   <ArrowRight className="h-4 w-4" />

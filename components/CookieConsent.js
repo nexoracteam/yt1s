@@ -40,20 +40,20 @@ export default function CookieConsent() {
   if (!visible) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[80] px-4 pb-4 sm:px-6">
-      <div className="mx-auto max-w-5xl rounded-[1.5rem] border border-orange-200 bg-white p-4 shadow-2xl shadow-orange-200/50 dark:border-white/10 dark:bg-zinc-950 dark:shadow-black/60 sm:flex sm:items-center sm:gap-5">
+    <div className="fixed inset-x-0 bottom-0 z-[80] px-3 pb-3 sm:px-6 sm:pb-4">
+      <div className="mx-auto max-w-5xl rounded-2xl border border-orange-200 bg-white p-3 shadow-2xl shadow-orange-200/50 dark:border-white/10 dark:bg-zinc-950 dark:shadow-black/60 sm:flex sm:items-center sm:gap-5">
         <div className="flex gap-3">
-          <div className="mt-1 grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <div className="mt-1 hidden h-10 w-10 shrink-0 sm:grid place-items-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
             <h2 className="text-sm font-black text-ink dark:text-white">Cookie consent</h2>
-            <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-300">
+            <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300 sm:text-sm sm:leading-6">
               We use essential storage for your preferences and may use privacy-conscious analytics after approval to improve yt1s.video. Read our <Link href="/cookie-policy" className="font-bold text-flame">Cookie Policy</Link> and <Link href="/privacy" className="font-bold text-flame">Privacy Policy</Link>.
             </p>
           </div>
         </div>
-        <div className="mt-4 flex shrink-0 flex-col gap-2 sm:ml-auto sm:mt-0 sm:flex-row">
+        <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:ml-auto sm:mt-0">
           <button type="button" onClick={() => save("essential")} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-black text-gray-700 hover:border-flame hover:text-flame dark:border-white/10 dark:text-gray-200">
             Essential only
           </button>

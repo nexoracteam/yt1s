@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { brand, priorityToolSlugs, toolCategories, tools } from "../lib/tools";
+import { brand, isIndexable, priorityToolSlugs, toolCategories, tools } from "../lib/tools";
 
 export default function Footer() {
   return (
@@ -26,7 +26,7 @@ export default function Footer() {
             <div key={category.title}>
               <h3 className="font-bold text-white">{category.title}</h3>
               <ul className="mt-4 space-y-2 text-sm text-gray-300">
-                {category.tools.slice(0, 6).map((slug) => (
+                {category.tools.filter(isIndexable).slice(0, 7).map((slug) => (
                   <li key={slug}>
                     <Link href={`/${slug}`} className="hover:text-white">{tools[slug].title}</Link>
                   </li>

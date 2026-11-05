@@ -1,9 +1,9 @@
 import { allBlogSlugs, blogPosts } from "../../lib/blog";
-import { allToolSlugs, brand, legalPages, tools } from "../../lib/tools";
+import { allToolSlugs, brand, isIndexable, legalPages, tools } from "../../lib/tools";
 import { siteUrl } from "../../lib/seo";
 
 export function GET() {
-  const toolLines = allToolSlugs().map((slug) => `- ${tools[slug].title}: ${siteUrl}/${slug} - ${tools[slug].summary}`);
+  const toolLines = allToolSlugs().filter(isIndexable).map((slug) => `- ${tools[slug].title}: ${siteUrl}/${slug} - ${tools[slug].summary}`);
   const legalLines = Object.keys(legalPages).map((slug) => `- ${legalPages[slug].title}: ${siteUrl}/${slug}`);
   const blogLines = allBlogSlugs().map((slug) => `- ${blogPosts[slug].title}: ${siteUrl}/blog/${slug} - ${blogPosts[slug].description}`);
   return new Response(`# ${brand.name}

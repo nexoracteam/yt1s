@@ -22,6 +22,7 @@ export async function generateMetadata({ params }) {
     description,
     keywords: tool ? [...seoKeywords, tool.title, ...(tool.formats || [])] : [page.title, "yt1s.video", "privacy", "dmca", "terms"],
     alternates: { canonical: absoluteUrl(slug) },
+    ...(tool?.thin ? { robots: { index: false, follow: true } } : {}),
     openGraph: { ...baseOpenGraph(slug), title: titleFor(title), description },
     twitter: { card: "summary_large_image", title: titleFor(title), description }
   };

@@ -19,14 +19,22 @@ function directDownloadUrl(url) {
 }
 
 const statusLabels = {
-  queued: "Your download is in the queue…",
-  checking: "Finding the best available format…",
-  retrying: "Reconnecting automatically. Please keep this page open…",
-  downloading: "Preparing your video…",
-  uploading: "Finishing your download…",
-  completed: "Your download link is ready. Streaming to your device.",
+  queued: "You're next in line. Starting in a moment…",
+  checking: "Step 1 of 3: contacting YouTube and finding the best format…",
+  retrying: "Step 1 of 3: YouTube is slow to answer, trying another route. This can take up to a minute — keep this page open.",
+  downloading: "Step 2 of 3: preparing your file…",
+  uploading: "Step 3 of 3: finishing your download…",
+  completed: "Ready. Your download is starting. If it doesn't, press Download File below.",
   failed: "Download couldn't be completed."
 };
+
+const qualityChips = [
+  ["360p", "360p", "Smallest"],
+  ["480p", "480p", "SD"],
+  ["720p", "720p", "HD"],
+  ["1080p", "1080p", "Full HD"],
+  ["audio", "Audio", "M4A"]
+];
 
 function CopyButton({ text, label = "Copy" }) {
   const [copied, setCopied] = useState(false);
@@ -333,30 +341,26 @@ export default function ToolClient({ tool }) {
   return (
     <section className={isDownload ? "mx-auto w-full max-w-5xl px-3 sm:px-6 lg:px-8" : "mx-auto max-w-4xl px-4 sm:px-6 lg:px-8"}>
       {isDownload ? (
-        <form onSubmit={submit} className="mx-auto w-full max-w-4xl rounded-[1.75rem] border border-orange-100 bg-white/95 p-2.5 shadow-2xl shadow-orange-100/80 backdrop-blur dark:border-white/10 dark:bg-[#121017] dark:shadow-red-950/20 sm:p-4">
-          <div className="grid w-full grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_150px_180px]">
+        <form onSubmit={submit} className="mx-auto w-full max-w-4xl rounded-[1.75rem] border border-orange-100 bg-white/95 p-3 shadow-2xl shadow-orange-100/80 backdrop-blur dark:border-white/10 dark:bg-[#121017] dark:shadow-red-950/20 sm:p-4">
+          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
             <div className="relative min-h-14 min-w-0 w-full overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/70 focus-within:border-red-300 focus-within:ring-4 focus-within:ring-red-500/10 dark:border-white/10 dark:bg-black/25">
-              <input aria-label="YouTube video link" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={inputPlaceholder} className="h-14 w-full min-w-0 bg-transparent px-4 pr-28 text-sm font-bold text-ink outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500 sm:text-base" required />
+              <input aria-label="YouTube video link" inputMode="url" autoComplete="off" disabled={loading} value={input} onChange={(event) => setInput(event.target.value)} placeholder={inputPlaceholder} className="h-14 w-full min-w-0 bg-transparent px-4 pr-28 text-sm font-bold text-ink outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-gray-500 sm:text-base" required />
               <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-                <button type="button" disabled={loading} onClick={async () => { try { setInput(await navigator.clipboard.readText()); } catch { setError("Please paste the link into the input field."); } }} className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl bg-white px-3 text-xs font-black text-gray-600 shadow-sm hover:text-red-500 disabled:opacity-50 dark:bg-white/10 dark:text-gray-200"><Clipboard className="h-3.5 w-3.5" />Paste</button>
-                {input && <button type="button" aria-label="Clear link" disabled={loading} onClick={() => { setInput(""); setDownloadResult(null); setJob(null); setError(""); setResumeId(""); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-gray-400 hover:bg-white hover:text-red-500 disabled:opacity-50 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>}
+                {input ? <button type="button" aria-label="Clear link" disabled={loading} onClick={() => { setInput(""); setDownloadResult(null); setJob(null); setError(""); setResumeId(""); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-gray-400 hover:bg-white hover:text-red-500 disabled:opacity-50 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
+                  : <button type="button" disabled={loading} onClick={async () => { try { setInput(await navigator.clipboard.readText()); } catch { setError("Please paste the link into the input field."); } }} className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl bg-white px-3 text-xs font-black text-gray-600 shadow-sm hover:text-red-500 disabled:opacity-50 dark:bg-white/10 dark:text-gray-200"><Clipboard className="h-3.5 w-3.5" />Paste</button>}
               </div>
             </div>
-            <select aria-label="Download quality" disabled={loading} value={quality} onChange={(event) => setQuality(event.target.value)} className="h-14 w-full rounded-2xl border border-orange-100 bg-white px-4 text-sm font-black text-ink shadow-sm outline-none focus:border-red-300 focus:ring-4 focus:ring-red-500/10 disabled:opacity-60 dark:border-white/10 dark:bg-white/10 dark:text-white">
-              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="360p">360p MP4</option>
-              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="480p">480p MP4</option>
-              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="720p">720p HD</option>
-              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="1080p">1080p FHD</option>
-              <option className="bg-white text-ink dark:bg-zinc-900 dark:text-white" value="audio">Audio M4A</option>
-            </select>
-            <button type="submit" disabled={loading} className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 px-5 text-sm font-black text-white shadow-lg shadow-red-500/30 hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-70 sm:text-base">
-              {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Preparing...</> : <><Download className="h-4 w-4" />Download</>}
+            <button type="submit" disabled={loading} className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-500 to-pink-600 px-8 text-base font-black text-white shadow-lg shadow-red-500/30 hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-70 sm:w-auto">
+              {loading ? <><Loader2 className="h-5 w-5 animate-spin" />Preparing...</> : <><Download className="h-5 w-5" />Download</>}
             </button>
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 sm:justify-between">
-            <span className="inline-flex items-center gap-1"><ShieldCheck className="h-4 w-4 text-emerald-500" />Stream to device</span>
-            <span>No video storage</span>
-            <span>No upload wait</span>
+          <div role="radiogroup" aria-label="Download quality" className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+            {qualityChips.map(([value, label, note]) => (
+              <button key={value} type="button" role="radio" aria-checked={quality === value} disabled={loading} onClick={() => setQuality(value)}
+                className={`rounded-full border px-4 py-2 text-xs font-black disabled:opacity-60 ${quality === value ? "border-red-500 bg-red-500 text-white shadow-md shadow-red-500/25" : "border-orange-200 bg-white text-ink hover:border-red-300 dark:border-white/10 dark:bg-white/5 dark:text-gray-100"}`}>
+                {label} <span className={quality === value ? "text-white/80" : "text-gray-400"}>· {note}</span>
+              </button>
+            ))}
           </div>
         </form>
       ) : (
