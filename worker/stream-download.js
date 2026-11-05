@@ -106,7 +106,7 @@ export function streamMedia(req, res, info, quality, { maxBytes, spawnProcess = 
     res.removeListener("close", stop);
     if (code === 0 && started) res.end();
     else if (!res.destroyed) fail();
-    log(JSON.stringify({ event: "stream_finished", bytes, success: code === 0 && started, ...(code === 0 && started ? {} : { reason: streamFailure(stderr) }) }));
+    log(JSON.stringify({ event: "stream_finished", bytes, success: code === 0 && started, ...(code === 0 && started ? {} : { reason: streamFailure(stderr), detail: stderr.replace(/https?://S+/g, "<url>").slice(-300) }) }));
     resolve();
   }));
 }
