@@ -106,7 +106,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
       }
       const token = nanoid(32);
       sources.set(job.id, { info: selectedInfo, token });
-      const origin = env.PUBLIC_WORKER_URL || (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : "https://yt1s-production.up.railway.app");
+      const origin = env.PUBLIC_WORKER_URL || ("https://yt1s-worker-b6abf79b9888.herokuapp.com");
       job.downloadUrl = `${origin}/stream/${job.id}?token=${token}`;
       job.expiresAt = new Date(Date.now() + ttlMs).toISOString();
       job.status = "completed";

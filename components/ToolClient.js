@@ -12,7 +12,7 @@ function directDownloadUrl(url) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return "";
-    if (parsed.hostname === "yt1s-production.up.railway.app" && parsed.pathname.startsWith("/stream/")) return url;
+    if (parsed.hostname === "yt1s-worker-b6abf79b9888.herokuapp.com" && parsed.pathname.startsWith("/stream/")) return url;
     if (parsed.hostname !== "res.cloudinary.com") return "";
     return url.includes("/fl_attachment/") ? url : url.replace("/upload/", "/upload/fl_attachment/");
   } catch { return ""; }

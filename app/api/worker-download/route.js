@@ -11,7 +11,7 @@ function failure(code, status) {
 
 async function proxy(path, options = {}) {
   try {
-    const base = (process.env.DOWNLOAD_WORKER_URL || "https://yt1s-production.up.railway.app").replace(/\/$/, "");
+    const base = (process.env.DOWNLOAD_WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
     const timeoutMs = options.method === "POST" ? 45000 : 30000;
     const response = await fetch(`${base}${path}`, {
       ...options,
