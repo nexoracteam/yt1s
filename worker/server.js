@@ -58,17 +58,20 @@ export async function createWorker({ env = process.env, directory = path.join(__
       // bounded, known-compatible clients before trying the optional cookie session.
       // With a cookie session, the cookie strategy is the one that works from a datacenter IP,
       // so try it first instead of burning ~25s on strategies that YouTube bot-blocks.
-      // With several accounts, a second cookie attempt rotates to a different account.
-      const cookieStrategies = cookies.available
-        ? Array.from({ length: Math.min(cookies.accounts, 2) }, () => ({ name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true })) : [];
+      // Cookie sessions work from a datacenter IP, so try them first: once without the watch page
+      // (fast) and once with it (some videos only expose formats there). Round-robin moves each
+      // attempt to a different account when several are configured.
+      const cookieStrategies = cookies.available ? [
+        { name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true },
+        { name: "cookies", playerClients: "web_safari,web_creator", cookies: true }
+      ] : [];
       const strategies = [
         ...cookieStrategies,
         { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
         { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" },
         { name: "tv-safari", playerClients: "tv,web_safari" },
         { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
-        { name: "default" },
-        ...(cookies.available ? [{ name: "cookies", playerClients: "web_safari,web_creator", cookies: true }] : [])
+        { name: "default" }
       ];
       let selectedInfo;
       for (let attempt = 0; attempt < strategies.length; attempt++) {
