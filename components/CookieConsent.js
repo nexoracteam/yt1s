@@ -49,7 +49,7 @@ export default function CookieConsent() {
           <div>
             <h2 className="text-sm font-black text-ink dark:text-white">Cookie consent</h2>
             <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300 sm:text-sm sm:leading-6">
-              We use essential storage for your preferences and may use privacy-conscious analytics after approval to improve yt1s.video. Read our <Link href="/cookie-policy" className="font-bold text-flame">Cookie Policy</Link> and <Link href="/privacy" className="font-bold text-flame">Privacy Policy</Link>.
+              We use essential storage for your preferences, analytics after approval, and an advertising partner (Monetag) that may set its own cookies to show ads. Read our <Link href="/cookie-policy" className="font-bold text-flame">Cookie Policy</Link> and <Link href="/privacy" className="font-bold text-flame">Privacy Policy</Link>.
             </p>
           </div>
         </div>

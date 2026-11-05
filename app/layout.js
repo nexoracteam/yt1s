@@ -12,6 +12,7 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
 const space = Space_Grotesk({ subsets: ["latin"], variable: "--font-space" });
 const googleAnalyticsId = "G-0NZ5W4C28E";
 const googleSiteVerification = "KGQZY9TuxjDpCHzABv7mXt1cJ8e580-KG-Evsybccp4";
+const monetagVerification = "83de405a30af5bf0fafbd875f00e8e3e";
 
 export const metadata = {
   metadataBase: new URL(siteUrl),
@@ -21,7 +22,8 @@ export const metadata = {
   },
   description: brand.description,
   verification: {
-    google: googleSiteVerification
+    google: googleSiteVerification,
+    other: { monetag: monetagVerification }
   },
   alternates: {
     canonical: siteUrl
@@ -83,6 +85,7 @@ export default function RootLayout({ children }) {
         <Script id="google-analytics" strategy="afterInteractive">
           {`gtag('config', '${googleAnalyticsId}', { anonymize_ip: true });`}
         </Script>
+        <Script id="monetag-tag" src="https://quge5.com/88/tag.min.js" data-zone="306171" data-cfasync="false" strategy="beforeInteractive" async />
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         <Header />
         {children}
