@@ -103,7 +103,8 @@ export async function createWorker({ env = process.env, directory = path.join(__
           break;
         } catch (error) {
           const code = failureCode(error);
-          if (cookiePath && code === "SOURCE_BUSY") cookies.markBlocked(cookiePath);
+          // A bot block, or a session that no longer yields formats, sidelines that account for a while.
+          if (cookiePath && (code === "SOURCE_BUSY" || code === "FORMAT_UNAVAILABLE")) cookies.markBlocked(cookiePath);
           log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code }));
           if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) throw error;
           job.status = "retrying";
