@@ -11,7 +11,7 @@ if [ "${WARP_ENABLED:-true}" = "true" ]; then
     [ -f wgcf-account.toml ] || timeout 30 wgcf register --accept-tos >/tmp/warp/register.log 2>&1
     timeout 30 wgcf generate >>/tmp/warp/register.log 2>&1 || { echo "warp: wgcf failed"; exit 0; }
     {
-      sed -n '/^\[Interface\]/,/^\[Peer\]/{/^\[Peer\]/!p}' wgcf-profile.conf | grep -v '^DNS'
+      sed -n '/^\[Interface\]/,/^\[Peer\]/{/^\[Peer\]/!p}' wgcf-profile.conf
       sed -n '/^\[Peer\]/,$p' wgcf-profile.conf
       printf '\n[http]\nBindAddress = 127.0.0.1:40000\n'
     } > wireproxy.conf
