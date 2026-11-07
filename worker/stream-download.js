@@ -22,7 +22,26 @@ export function mediaHeaders(value) {
   return mediaHeaderEntries(value).map(([key, headerValue]) => `${key}: ${headerValue}\r\n`).join("");
 }
 
-export async function probeMedia(info, { fetcher = fetch, timeoutMs = 15000 } = {}) {
+// Node's fetch has no proxy support, so a probe that must leave through the WARP proxy shells out to curl.
+function curlFetcher(proxy, spawnProcess = spawn) {
+  return (url, { headers = {}, signal } = {}) => new Promise((resolve, reject) => {
+    const args = ["-sS", "-L", "--max-time", "15", "-x", proxy, "-o", "/dev/null", "-w", "%{http_code}"];
+    for (const [key, value] of Object.entries(headers)) args.push("-H", `${key}: ${value}`);
+    const child = spawnProcess("curl", [...args, url], { stdio: ["ignore", "pipe", "ignore"] });
+    let out = "";
+    signal?.addEventListener("abort", () => child.kill("SIGKILL"), { once: true });
+    child.stdout.on("data", (chunk) => { out += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      const status = Number(out.trim().slice(-3));
+      if (code !== 0 || !status) return reject(new Error("probe failed"));
+      resolve({ ok: status >= 200 && status < 300, status, body: null });
+    });
+  });
+}
+
+export async function probeMedia(info, { fetcher, proxy, timeoutMs = 15000, spawnProcess } = {}) {
+  fetcher ||= proxy ? curlFetcher(proxy, spawnProcess) : fetch;
   const inputs = info.requested_formats || [info];
   for (const input of inputs) {
     const url = mediaUrl(input.url);
@@ -48,13 +67,15 @@ function streamFailure(stderr) {
   return "STREAM_FAILED";
 }
 
-export function streamArgs(info, quality) {
+export function streamArgs(info, quality, { proxy } = {}) {
   const inputs = info.requested_formats || [info];
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin"];
   for (const input of inputs) {
     const url = mediaUrl(input.url);
     if (!url) throw new DownloadError("FORMAT_UNAVAILABLE");
     args.push("-protocol_whitelist", "https,tls,tcp,crypto,http", "-rw_timeout", "20000000", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "3");
+    // Media URLs are bound to the IP that extracted them, so a WARP-extracted link must also stream through WARP.
+    if (proxy) args.push("-http_proxy", proxy);
     const headers = mediaHeaders(input.http_headers || info.http_headers);
     if (headers) args.push("-headers", headers);
     args.push("-i", url);
@@ -75,8 +96,8 @@ export function streamArgs(info, quality) {
   return [...args, ...fragment, "-f", "mp4", "pipe:1"];
 }
 
-export function streamMedia(req, res, info, quality, { maxBytes, spawnProcess = spawn, log = console.log } = {}) {
-  const args = streamArgs(info, quality);
+export function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnProcess = spawn, log = console.log } = {}) {
+  const args = streamArgs(info, quality, { proxy });
   const child = spawnProcess("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   let bytes = 0, started = false, finished = false, stderr = "";
   const filename = `${String(info.title || "video").replace(/[\r\n/\\<>:"|?*]/g, "_").slice(0, 100)}.${quality === "audio" ? "m4a" : "mp4"}`;

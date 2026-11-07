@@ -21,6 +21,8 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const prepareConcurrency = Math.max(1, Number(env.PREPARE_CONCURRENCY || 3));
   const maxQueue = Math.max(10, Number(env.MAX_QUEUE || 50));
   const streamConcurrency = Math.max(1, Number(env.STREAM_CONCURRENCY || 10));
+  const warpProxy = env.WARP_PROXY || "";
+  const failureCacheMs = Number(env.FAILURE_CACHE_MS ?? 45000);
   const jobs = new Map();
   const sources = new Map();
   let activeStreams = 0;
@@ -61,19 +63,25 @@ export async function createWorker({ env = process.env, directory = path.join(__
       // Cookie sessions work from a datacenter IP, so try them first: once without the watch page
       // (fast) and once with it (some videos only expose formats there). Round-robin moves each
       // attempt to a different account when several are configured.
-      const cookieStrategies = cookies.available ? [
+      // Cookie sessions first (skipped while every account is cooling down, so a dead session is not re-hit).
+      // Then WARP (a different IP, no cookies), then only two direct tries: from a datacenter IP the other
+      // anonymous clients all get the same bot block, so extra attempts only add load and delay.
+      const cookieStrategies = cookies.available && (cookies.healthy?.() ?? 1) > 0 ? [
         { name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true },
         { name: "cookies", playerClients: "web_safari,web_creator", cookies: true }
       ] : [];
+      const warpStrategies = warpProxy ? [
+        { name: "warp-modern-tv", playerClients: "tv_samsung,visionos,web", proxy: warpProxy },
+        { name: "warp-pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage", proxy: warpProxy },
+        { name: "warp-vr", playerClients: "android_vr,web_embedded", proxy: warpProxy }
+      ] : [];
       const strategies = [
         ...cookieStrategies,
+        ...warpStrategies,
         { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
-        { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" },
-        { name: "tv-safari", playerClients: "tv,web_safari" },
-        { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
-        { name: "default" }
+        { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" }
       ];
-      let selectedInfo;
+      let selectedInfo, selectedProxy;
       for (let attempt = 0; attempt < strategies.length; attempt++) {
         await mkdir(jobDir, { recursive: true });
         let cookiePath;
@@ -83,7 +91,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.status = attempt ? "retrying" : "checking";
           const strategy = strategies[attempt];
           if (strategy.cookies) cookiePath = await cookies.checkout(jobDir);
-          const args = ytDlpArgs({ cookiePath, proxy: env.YTDLP_PROXY, playerClients: strategy.playerClients, playerSkip: strategy.playerSkip });
+          const args = ytDlpArgs({ cookiePath, proxy: strategy.proxy || env.YTDLP_PROXY, playerClients: strategy.playerClients, playerSkip: strategy.playerSkip });
           const { stdout } = await run("yt-dlp", [...args, "--dump-single-json", "--skip-download", "-f", formatSelector(job.quality), url]);
           const info = JSON.parse(stdout);
           if (info.is_live || info.live_status === "is_upcoming") throw new DownloadError("LIVE_VIDEO");
@@ -95,11 +103,12 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
           streamArgs(info, job.quality);
           stage = "probe";
-          await probe(info);
+          await probe(info, strategy.proxy ? { proxy: strategy.proxy } : undefined);
           const estimate = Number(info.filesize || info.filesize_approx || 0);
           if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
           job.estimatedBytes = estimate;
           selectedInfo = info;
+          selectedProxy = strategy.proxy;
           if (cookiePath) cookies.markGood?.(cookiePath);
           break;
         } catch (error) {
@@ -116,7 +125,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
         }
       }
       const token = nanoid(32);
-      sources.set(job.id, { info: selectedInfo, token });
+      sources.set(job.id, { info: selectedInfo, token, proxy: selectedProxy });
       const origin = env.PUBLIC_WORKER_URL || ("https://yt1s-worker-b6abf79b9888.herokuapp.com");
       job.downloadUrl = `${origin}/stream/${job.id}?token=${token}`;
       job.expiresAt = new Date(Date.now() + ttlMs).toISOString();
@@ -146,7 +155,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
       cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
-      proxy: Boolean(env.YTDLP_PROXY), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      proxy: Boolean(env.YTDLP_PROXY), warp: Boolean(warpProxy), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
   });
@@ -161,6 +170,12 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const existing = jobs.get(byVideo.get(key));
     if (existing && existing.status !== "failed") {
       return res.status(existing.status === "completed" ? 200 : 202).json({ ...existing, jobId: existing.id, cached: existing.status === "completed" });
+    }
+    // A video that just failed all strategies is not retried for a short while: repeated clicks would only
+    // hammer YouTube again and lengthen the block.
+    const lastFailed = jobs.get(byVideo.get(key));
+    if (lastFailed?.status === "failed" && Date.now() - Date.parse(lastFailed.failedAt) < failureCacheMs) {
+      return res.status(200).json({ ...lastFailed, jobId: lastFailed.id });
     }
     if (queue.length >= maxQueue || jobs.size >= 500) return res.status(429).json(publicFailure(new DownloadError("SERVICE_BUSY")));
     const id = nanoid(12);
@@ -187,7 +202,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     if (activeStreams >= streamConcurrency) return res.status(503).send("The download is still preparing. Please try the download button again in a moment.");
     if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
     activeStreams++;
-    try { await stream(req, res, source.info, job.quality, { maxBytes, log }); }
+    try { await stream(req, res, source.info, job.quality, { maxBytes, log, proxy: source.proxy }); }
     catch { if (!res.headersSent) res.status(502).send("Please generate a fresh download link."); else res.destroy(); }
     finally { activeStreams--; }
   });

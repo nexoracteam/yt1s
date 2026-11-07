@@ -67,7 +67,7 @@ test("bounded retries never leak internal errors and failure does not remove coo
   const job = await f.finish((await f.start()).jobId);
   assert.equal(job.status, "failed");
   assert.equal(job.code, "SOURCE_BUSY");
-  assert.equal(calls, 7);
+  assert.equal(calls, 4);
   assert.doesNotMatch(JSON.stringify(job), /Railway|YOUTUBE_COOKIES|secret-value|429/);
   assert.match(await readFile(path.join(f.directory, "session-cookies.txt"), "utf8"), /initial/);
 });
@@ -206,4 +206,37 @@ test("repeated cookie failures escalate the cooldown and success resets it", asy
   store.markBlocked(good);
   store.markGood(good);
   assert.equal(store.healthy(), 1);
+});
+
+test("WARP strategies run after cookies, carry the proxy to probe and stream, and bound the retries", async (t) => {
+  const proxies = [];
+  let probeProxy, streamProxy;
+  const f = await fixture(t, {
+    env: { YOUTUBE_COOKIES: cookie("initial"), WARP_PROXY: "http://127.0.0.1:40000" },
+    async run(command, args) {
+      const i = args.indexOf("--proxy");
+      proxies.push(i < 0 ? null : args[i + 1]);
+      if (i < 0) throw new Error("Sign in to confirm you're not a bot");
+      return { stdout: JSON.stringify({ title: "V", duration: 20, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }) };
+    },
+    async probe(info, options) { probeProxy = options?.proxy; },
+    async stream(req, res, info, quality, options) { streamProxy = options.proxy; res.end("media"); }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.deepEqual(proxies, [null, null, "http://127.0.0.1:40000"]);
+  assert.equal(probeProxy, "http://127.0.0.1:40000");
+  assert.ok(streamArgs({ url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a", http_headers: {} }, "360p", { proxy: "http://127.0.0.1:40000" }).includes("-http_proxy"));
+  assert.ok(!streamArgs({ url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a", http_headers: {} }, "360p").includes("-http_proxy"));
+});
+
+test("cookie strategies are skipped while every account cools down, and a fresh failure is not retried at once", async (t) => {
+  let calls = 0;
+  const f = await fixture(t, { env: { YOUTUBE_COOKIES: cookie("x") }, async run() { calls++; throw new Error("Requested format is not available"); } });
+  const first = await f.finish((await f.start()).jobId);
+  assert.equal(first.status, "failed");
+  const before = calls;
+  const again = await f.start();
+  assert.equal(again.status, "failed");
+  assert.equal(calls, before, "failed video must not be re-extracted inside the failure cache window");
 });
