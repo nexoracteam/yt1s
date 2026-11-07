@@ -39,6 +39,7 @@ export function validCookies(text, now = Date.now() / 1000) {
 }
 
 const COOLDOWN_MS = 30 * 60 * 1000;
+const MAX_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
 function cookieTexts(env) {
   // YOUTUBE_COOKIES_B64 is account 1; YOUTUBE_COOKIES_B64_2, _3, ... add more accounts.
@@ -60,7 +61,7 @@ export async function createCookieStore(directory, env, now = () => Date.now()) 
     if (!validCookies(text)) continue;
     const masterPath = path.join(directory, index === 1 ? "session-cookies.txt" : `session-cookies-${index}.txt`);
     await writeFile(masterPath, text, { mode: 0o600 });
-    accounts.push({ index, masterPath, blockedUntil: 0 });
+    accounts.push({ index, masterPath, blockedUntil: 0, strikes: 0 });
   }
   const leases = new Map();
   let cursor = 0;
@@ -90,9 +91,16 @@ export async function createCookieStore(directory, env, now = () => Date.now()) 
       await writeFile(`${account.masterPath}.tmp`, updated, { mode: 0o600 });
       await rename(`${account.masterPath}.tmp`, account.masterPath);
     },
+    // Each consecutive failure doubles the cooldown (30 min up to 12 h) so a dead session stops being retried.
     markBlocked(cookiePath) {
       const account = leases.get(cookiePath);
-      if (account) account.blockedUntil = now() + COOLDOWN_MS;
+      if (!account) return;
+      account.strikes += 1;
+      account.blockedUntil = now() + Math.min(COOLDOWN_MS * 2 ** (account.strikes - 1), MAX_COOLDOWN_MS);
+    },
+    markGood(cookiePath) {
+      const account = leases.get(cookiePath);
+      if (account) { account.strikes = 0; account.blockedUntil = 0; }
     },
     release(cookiePath) { leases.delete(cookiePath); }
   };

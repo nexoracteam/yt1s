@@ -100,6 +100,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
           if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
           job.estimatedBytes = estimate;
           selectedInfo = info;
+          if (cookiePath) cookies.markGood?.(cookiePath);
           break;
         } catch (error) {
           const code = failureCode(error);

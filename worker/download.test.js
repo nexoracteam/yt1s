@@ -186,3 +186,24 @@ test("cookie accounts rotate round-robin and a blocked account cools down", asyn
   clock += 31 * 60 * 1000;
   assert.equal(store.healthy(), 2);
 });
+
+test("repeated cookie failures escalate the cooldown and success resets it", async (t) => {
+  const directory = await mkdtemp(path.join(tmpdir(), "yt1s-strikes-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  let clock = 0;
+  const store = await createCookieStore(directory, { YOUTUBE_COOKIES: cookie("one") }, () => clock);
+  const { mkdir } = await import("node:fs/promises");
+  const lease = async (name) => { const dir = path.join(directory, name); await mkdir(dir); return store.checkout(dir); };
+  store.markBlocked(await lease("a"));
+  clock += 31 * 60 * 1000;
+  assert.equal(store.healthy(), 1);
+  store.markBlocked(await lease("b"));
+  clock += 31 * 60 * 1000;
+  assert.equal(store.healthy(), 0, "second strike lasts about an hour");
+  clock += 60 * 60 * 1000;
+  assert.equal(store.healthy(), 1);
+  const good = await lease("c");
+  store.markBlocked(good);
+  store.markGood(good);
+  assert.equal(store.healthy(), 1);
+});
