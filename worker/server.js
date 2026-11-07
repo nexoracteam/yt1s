@@ -12,7 +12,7 @@ const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DO
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
+  run = runCommand, warpCheck, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
@@ -22,6 +22,18 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const maxQueue = Math.max(10, Number(env.MAX_QUEUE || 50));
   const streamConcurrency = Math.max(1, Number(env.STREAM_CONCURRENCY || 10));
   const warpProxy = env.WARP_PROXY || "";
+  // The tunnel starts asynchronously (and may fail), so confirm it is really up, caching the answer briefly.
+  let warpState = { at: 0, up: false };
+  async function warpUp() {
+    if (!warpProxy) return false;
+    if (Date.now() - warpState.at < 30000) return warpState.up;
+    const check = warpCheck || (async () => {
+      const { stdout } = await runCommand("curl", ["-s", "-m", "6", "-x", warpProxy, "https://www.cloudflare.com/cdn-cgi/trace"], { timeoutMs: 8000 });
+      return /^warp=(on|plus)/m.test(stdout);
+    });
+    warpState = { at: Date.now(), up: await check().catch(() => false) };
+    return warpState.up;
+  }
   const failureCacheMs = Number(env.FAILURE_CACHE_MS ?? 45000);
   const jobs = new Map();
   const sources = new Map();
@@ -70,7 +82,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
         { name: "cookies-api", playerClients: "web_safari,web_creator", playerSkip: "webpage", cookies: true },
         { name: "cookies", playerClients: "web_safari,web_creator", cookies: true }
       ] : [];
-      const warpStrategies = warpProxy ? [
+      const warpStrategies = await warpUp() ? [
         { name: "warp-modern-tv", playerClients: "tv_samsung,visionos,web", proxy: warpProxy },
         { name: "warp-pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage", proxy: warpProxy },
         { name: "warp-vr", playerClients: "android_vr,web_embedded", proxy: warpProxy }
@@ -155,7 +167,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
       cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
-      proxy: Boolean(env.YTDLP_PROXY), warp: Boolean(warpProxy), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
   });

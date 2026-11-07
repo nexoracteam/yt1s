@@ -213,6 +213,7 @@ test("WARP strategies run after cookies, carry the proxy to probe and stream, an
   let probeProxy, streamProxy;
   const f = await fixture(t, {
     env: { YOUTUBE_COOKIES: cookie("initial"), WARP_PROXY: "http://127.0.0.1:40000" },
+    warpCheck: async () => true,
     async run(command, args) {
       const i = args.indexOf("--proxy");
       proxies.push(i < 0 ? null : args[i + 1]);

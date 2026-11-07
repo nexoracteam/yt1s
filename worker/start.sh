@@ -18,15 +18,13 @@ if [ "${WARP_ENABLED:-true}" = "true" ]; then
     wireproxy -c wireproxy.conf >/tmp/warp/wireproxy.log 2>&1 &
     echo "warp: wireproxy started"
   ) &
-  # Wait briefly for the tunnel, then tell the worker whether to use it.
-  for i in 1 2 3 4 5 6 7 8 9 10; do
-    sleep 1
-    if curl -s -m 5 -x http://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace 2>/dev/null | grep -q '^warp=on\|^warp=plus'; then
-      export WARP_PROXY=http://127.0.0.1:40000
-      echo "warp: tunnel up"
-      break
-    fi
-  done
+  # The tunnel needs a few seconds to register; the worker checks it lazily before each job.
+  export WARP_PROXY=http://127.0.0.1:40000
+  # One-line status for the logs (no keys): did registration work and does the trace report WARP?
+  ( sleep 20; echo "warp status: $(curl -s -m 6 -x http://127.0.0.1:40000 https://www.cloudflare.com/cdn-cgi/trace 2>&1 | grep -E '^(warp|ip)=' | tr '
+' ' ') | register: $(tail -c 160 /tmp/warp/register.log 2>/dev/null | tr '
+' ' ') | wireproxy: $(tail -c 200 /tmp/warp/wireproxy.log 2>/dev/null | tr '
+' ' ')" ) &
 fi
 
 exec npm start
