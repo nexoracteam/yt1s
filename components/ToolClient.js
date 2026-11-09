@@ -13,6 +13,7 @@ function directDownloadUrl(url) {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return "";
     if (parsed.hostname === "yt1s-worker-b6abf79b9888.herokuapp.com" && parsed.pathname.startsWith("/stream/")) return url;
+    if (/^[a-z0-9-]+\.trycloudflare\.com$/.test(parsed.hostname) && parsed.protocol === "https:" && parsed.pathname.startsWith("/stream/")) return url;
     if (parsed.hostname !== "res.cloudinary.com") return "";
     return url.includes("/fl_attachment/") ? url : url.replace("/upload/", "/upload/fl_attachment/");
   } catch { return ""; }
