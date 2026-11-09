@@ -22,6 +22,11 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const maxQueue = Math.max(10, Number(env.MAX_QUEUE || 50));
   const streamConcurrency = Math.max(1, Number(env.STREAM_CONCURRENCY || 10));
   const warpProxy = env.WARP_PROXY || "";
+  // Optional second worker (the always-on Heroku one) used when this worker cannot extract a video itself.
+  const fallbackUrl = (env.FALLBACK_WORKER_URL || "").replace(/\/$/, "");
+  // Home worker registry: a worker on a home connection (behind a Cloudflare quick tunnel) announces its
+  // current public URL here, so the sites can prefer it and fall back to this worker when it is offline.
+  let home = { url: "", at: 0 };
   // The tunnel starts asynchronously (and may fail), so confirm it is really up, caching the answer briefly.
   let warpState = { at: 0, up: false };
   // When WARP itself gets bot-blocked, register a fresh WARP identity (new exit IP). Rate limited so a
@@ -76,6 +81,31 @@ export async function createWorker({ env = process.env, directory = path.join(__
     }
   }
 
+  // Hand the job to the fallback worker and mirror its result; the download link then points at that worker.
+  async function delegate(job) {
+    const headers = { "Content-Type": "application/json", ...(env.FALLBACK_WORKER_SECRET ? { Authorization: `Bearer ${env.FALLBACK_WORKER_SECRET}` } : {}) };
+    const started = await fetch(`${fallbackUrl}/download`, { method: "POST", headers, body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${job.videoId}`, quality: job.quality }), signal: AbortSignal.timeout(15000) });
+    const first = await started.json();
+    const remoteId = first.jobId || first.id;
+    if (!remoteId) throw new DownloadError("SERVICE_BUSY");
+    let remote = first;
+    const deadline = Date.now() + 110000;
+    while (!["completed", "failed"].includes(remote.status) && Date.now() < deadline) {
+      await wait(2000);
+      remote = await (await fetch(`${fallbackUrl}/job/${remoteId}`, { headers, signal: AbortSignal.timeout(15000) })).json();
+    }
+    if (remote.status !== "completed" || !remote.downloadUrl) throw new DownloadError("SOURCE_BUSY");
+    for (const key of ["title", "thumbnail", "duration", "actualQuality", "estimatedBytes", "downloadUrl", "expiresAt"]) if (remote[key] !== undefined) job[key] = remote[key];
+    job.viaFallback = true;
+  }
+
+  function finishJob(job, startedAt) {
+    job.status = "completed";
+    job.progress = 100;
+    job.completedAt = new Date().toISOString();
+    log(JSON.stringify({ event: "download_complete", jobId: job.id, elapsedMs: Date.now() - startedAt, quality: job.actualQuality, fallback: Boolean(job.viaFallback) }));
+  }
+
   async function processJob(job) {
     const jobDir = path.join(directory, job.id);
     const url = `https://www.youtube.com/watch?v=${job.videoId}`;
@@ -100,12 +130,17 @@ export async function createWorker({ env = process.env, directory = path.join(__
         { name: "warp-pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage", proxy: warpProxy },
         { name: "warp-vr", playerClients: "android_vr,web_embedded", proxy: warpProxy }
       ] : [];
-      const strategies = [
-        ...cookieStrategies,
-        ...warpStrategies,
+      const directStrategies = [
         { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
-        { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" }
+        { name: "pot-api", playerClients: "mweb,web_safari,web_embedded", playerSkip: "webpage" },
+        // On a home (residential) connection the other anonymous clients work too, so keep them there.
+        ...(env.FULL_DIRECT_STRATEGIES === "true" ? [
+          { name: "tv-safari", playerClients: "tv,web_safari" },
+          { name: "vr-embedded", playerClients: "android_vr,web_embedded" },
+          { name: "default" }
+        ] : [])
       ];
+      const strategies = [...cookieStrategies, ...warpStrategies, ...directStrategies];
       let selectedInfo, selectedProxy;
       for (let attempt = 0; attempt < strategies.length; attempt++) {
         await mkdir(jobDir, { recursive: true });
@@ -163,6 +198,10 @@ export async function createWorker({ env = process.env, directory = path.join(__
       job.completedAt = new Date().toISOString();
       log(JSON.stringify({ event: "download_complete", jobId: job.id, elapsedMs: Date.now() - startedAt, quality: job.actualQuality }));
     } catch (error) {
+      if (fallbackUrl && RETRY_CODES.has(failureCode(error))) {
+        try { job.status = "retrying"; await delegate(job); return finishJob(job, startedAt); }
+        catch { log(JSON.stringify({ event: "fallback_failed", jobId: job.id })); }
+      }
       Object.assign(job, publicFailure(error), { status: "failed", failedAt: new Date().toISOString() });
       log(JSON.stringify({ event: "download_failed", jobId: job.id, code: job.code, elapsedMs: Date.now() - startedAt }));
     } finally {
@@ -187,6 +226,19 @@ export async function createWorker({ env = process.env, directory = path.join(__
       proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
+  });
+
+  app.post("/home/register", (req, res) => {
+    const url = String(req.body?.url || "");
+    if (!env.HOME_SECRET || req.headers.authorization !== `Bearer ${env.HOME_SECRET}`) return res.status(401).json({ ok: false });
+    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url)) return res.status(400).json({ ok: false });
+    home = { url: url.replace(/\/$/, ""), at: Date.now() };
+    res.json({ ok: true });
+  });
+
+  app.get("/home", (req, res) => {
+    const fresh = home.url && Date.now() - home.at < 150000;
+    res.set("Cache-Control", "no-store").json({ url: fresh ? home.url : null });
   });
 
   app.post("/download", requireSecret, (req, res) => {

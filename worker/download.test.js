@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import express from "express";
 import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
@@ -28,7 +29,7 @@ async function fixture(t, options) {
     }
     assert.fail("Job never finished");
   }
-  return { directory, start, finish };
+  return { directory, start, finish, base };
 }
 
 test("recovers from anonymous block, preserves rotated cookies, caches canonical URLs and cleans only job files", async (t) => {
@@ -253,4 +254,31 @@ test("a job where every WARP try is bot-blocked rotates the WARP identity once",
   assert.equal((await f.finish((await f.start()).jobId)).status, "failed");
   assert.equal((await f.finish((await f.start("https://youtu.be/aaaaaaaaaaa")).jobId)).status, "failed");
   assert.equal(rotations, 1, "rotation is rate limited");
+});
+
+test("a worker that cannot extract hands the job to the fallback worker and mirrors its link", async (t) => {
+  const remote = express();
+  remote.use(express.json());
+  remote.post("/download", (req, res) => res.status(202).json({ jobId: "remote-job-1", status: "queued" }));
+  remote.get("/job/remote-job-1", (req, res) => res.json({ id: "remote-job-1", status: "completed", title: "T", actualQuality: "360p", downloadUrl: "https://fallback.example/stream/remote-job-1?token=x", expiresAt: "2030-01-01T00:00:00Z" }));
+  const server = remote.listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const f = await fixture(t, {
+    env: { FALLBACK_WORKER_URL: `http://127.0.0.1:${server.address().port}` },
+    async run() { throw new Error("Sign in to confirm you're not a bot"); }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.viaFallback, true);
+  assert.match(job.downloadUrl, /fallback\.example\/stream/);
+});
+
+test("home worker registry needs the secret, accepts only tunnel URLs and expires", async (t) => {
+  const f = await fixture(t, { env: { HOME_SECRET: "s3cret" } });
+  const post = (body, token = "s3cret") => fetch(`${f.base}/home/register`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  assert.equal((await post({ url: "https://abc-def.trycloudflare.com" }, "wrong")).status, 401);
+  assert.equal((await post({ url: "https://evil.example.com" })).status, 400);
+  assert.equal((await post({ url: "https://abc-def.trycloudflare.com" })).status, 200);
+  assert.deepEqual(await (await fetch(`${f.base}/home`)).json(), { url: "https://abc-def.trycloudflare.com" });
 });
