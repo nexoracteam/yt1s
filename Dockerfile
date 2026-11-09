@@ -12,7 +12,7 @@ RUN git clone --depth 1 --branch 2.0.2 https://github.com/Brainicism/bgutil-ytdl
   && npx tsc
 
 # Free Cloudflare WARP via userspace WireGuard: wgcf creates the WARP profile, wireproxy exposes it as an HTTP proxy.
-RUN curl -fsSL -o /usr/local/bin/wgcf https://github.com/ViRb3/wgcf/releases/download/v2.3.1/wgcf_2.3.1_linux_amd64   && chmod +x /usr/local/bin/wgcf   && curl -fsSL https://github.com/pufferffish/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz | tar -xz -C /usr/local/bin wireproxy
+RUN curl -fsSL --retry 6 --retry-all-errors --retry-delay 4 -o /usr/local/bin/wgcf https://github.com/ViRb3/wgcf/releases/download/v2.3.1/wgcf_2.3.1_linux_amd64   && chmod +x /usr/local/bin/wgcf   && curl -fsSL --retry 6 --retry-all-errors --retry-delay 4 https://github.com/pufferffish/wireproxy/releases/download/v1.0.9/wireproxy_linux_amd64.tar.gz | tar -xz -C /usr/local/bin wireproxy
 
 WORKDIR /app
 COPY worker/package*.json ./
