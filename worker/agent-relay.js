@@ -6,7 +6,7 @@ import { streamHeaders } from "./stream-download.js";
 // Lets a worker on a home connection serve downloads without any inbound route (no tunnel, no port forwarding).
 // The home agent only makes outbound HTTPS calls to this server: it long-polls for tasks, returns extraction
 // results, and uploads finished media, which this server pipes straight to the visitor.
-export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 25000, extractTimeoutMs = 60000, uploadWaitMs = 45000 } = {}) {
+export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 25000, extractTimeoutMs = 60000, uploadWaitMs = 45000, drainWaitMs = 15000 } = {}) {
   let lastPoll = 0;
   let waiter = null;
   const tasks = [];
@@ -80,12 +80,23 @@ export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 2500
         if (!out.headersSent) out.status(200).set(streamHeaders(pending.info, pending.quality));
         clearTimeout(pending.idle);
         pending.idle = setTimeout(() => { out.destroy(); finishStream(); }, 120000);
+        pending.idle.unref?.();
         const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
-        const done = () => {
+        // Answer within seconds even when the visitor's connection is slow: Heroku's router kills a request that is
+        // still unanswered after 30s (H12) and the whole download would fail. A late "slow" ack tells the agent to
+        // ease off instead.
+        let replied = false;
+        const done = (slow = false) => {
+          if (replied) return;
+          replied = true;
           if (req.query.end === "1") { out.end(); finishStream(); }
-          res.json({ ok: true });
+          res.json({ ok: true, slow });
         };
-        if (body.length && !out.write(body)) out.once("drain", done); else done();
+        if (body.length && !out.write(body)) {
+          const wait = setTimeout(() => done(true), drainWaitMs);
+          out.once("drain", () => { clearTimeout(wait); done(false); });
+          out.once("close", () => { clearTimeout(wait); done(true); });
+        } else done(false);
       });
     }
   };

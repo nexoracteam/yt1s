@@ -68,6 +68,7 @@ async function handleStream(task) {
       const response = await fetch(`${url}?seq=${seq++}${end ? "&end=1" : ""}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body, signal: AbortSignal.timeout(60000) });
       total += body.length;
       if (!response.ok) { aborted = true; child.kill(); }
+      else if ((await response.json().catch(() => ({}))).slow) await sleep(2000); // visitor's connection is slow: ease off
     } catch { aborted = true; child.kill(); }
     sending = false;
     child.stdout.resume();

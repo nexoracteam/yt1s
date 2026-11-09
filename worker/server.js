@@ -58,7 +58,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     return warpState.up;
   }
   const failureCacheMs = Number(env.FAILURE_CACHE_MS ?? 45000);
-  const relay = createAgentRelay({ secret: env.HOME_SECRET, extractTimeoutMs: Number(env.AGENT_EXTRACT_TIMEOUT_MS || 60000) });
+  const relay = createAgentRelay({ secret: env.HOME_SECRET, extractTimeoutMs: Number(env.AGENT_EXTRACT_TIMEOUT_MS || 60000), drainWaitMs: Number(env.RELAY_DRAIN_WAIT_MS || 15000) });
   const jobs = new Map();
   const sources = new Map();
   let activeStreams = 0;

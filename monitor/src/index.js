@@ -6,6 +6,7 @@ const BACKUP = "https://yt1s-worker-eu-b88ee7e26698.herokuapp.com";
 const POLLS = 10;
 const POLL_MS = 6000;
 const REMIND_MS = 6 * 60 * 60 * 1000;
+const CONFIRM_RUNS = 2;
 
 // Different video/quality per site so the worker's 10 minute job cache cannot make one test reuse another.
 const SITES = [
@@ -97,17 +98,24 @@ async function run(env) {
   const now = Date.now();
   const state = {};
   const alerts = [], recoveries = [];
+  // A failure must be seen in two runs in a row before alerting: deploys and Heroku restarts cause one-off blips.
   for (const r of results) {
     const before = previous?.[r.name];
-    state[r.name] = { ok: r.ok, since: before && before.ok === r.ok ? before.since : now, lastAlert: before?.lastAlert || 0 };
-    if (!r.ok && (!before || before.ok || now - (before.lastAlert || 0) > REMIND_MS)) { alerts.push(r); state[r.name].lastAlert = now; }
-    if (r.ok && before && !before.ok) recoveries.push({ ...r, downMinutes: Math.round((now - before.since) / 60000) });
+    const fails = r.ok ? 0 : (before?.fails || 0) + 1;
+    let lastAlert = r.ok ? 0 : (before?.lastAlert || 0);
+    state[r.name] = { ok: r.ok, since: before && before.ok === r.ok ? before.since : now, fails, lastAlert };
+    if (!r.ok && fails >= CONFIRM_RUNS && (!lastAlert || now - lastAlert > REMIND_MS)) { alerts.push({ ...r, detail: `${r.detail} (${fails} runs lagataar)` }); state[r.name].lastAlert = now; }
+    // Only announce recovery for something that was actually alerted.
+    if (r.ok && before && !before.ok && before.lastAlert) recoveries.push({ ...r, downMinutes: Math.round((now - before.since) / 60000) });
   }
   // Both workers are watched: the main one (US) and the standby (EU) that the sites switch to automatically.
-  for (const [label, key, h] of [["Heroku worker (main, US)", "_worker_down", health], ["Heroku worker (standby, EU)", "_backup_down", backup]]) {
-    if (!h.ok && !previous?.[key]) { state[key] = true; alerts.push({ name: label, stage: "health", detail: "/health jawab nahi de raha", seconds: 0 }); }
-    else if (h.ok && previous?.[key]) recoveries.push({ name: label, detail: "wapas theek", downMinutes: 0 });
-    else if (!h.ok) state[key] = true;
+  for (const [label, key, h] of [["Heroku worker (main, US)", "_worker", health], ["Heroku worker (standby, EU)", "_backup", backup]]) {
+    const before = previous?.[key] || { fails: 0, alerted: false };
+    const fails = h.ok ? 0 : before.fails + 1;
+    let alerted = h.ok ? false : before.alerted;
+    if (!h.ok && fails >= CONFIRM_RUNS && !alerted) { alerts.push({ name: label, stage: "health", detail: `/health jawab nahi de raha (${fails} runs lagataar)`, seconds: 0 }); alerted = true; }
+    if (h.ok && before.alerted) recoveries.push({ name: label, detail: "wapas theek", downMinutes: 0 });
+    state[key] = { fails, alerted };
   }
 
   if (alerts.length) {

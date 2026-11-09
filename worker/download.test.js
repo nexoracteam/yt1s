@@ -17,7 +17,7 @@ async function fixture(t, options) {
   const app = await createWorker({ directory, env: { YOUTUBE_COOKIES: cookie("initial") }, probe: async () => {}, wait: async () => {}, log: () => {}, ...options });
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
-  t.after(async () => { await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { server.closeAllConnections?.(); await new Promise((resolve) => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
   async function start(url = "https://youtu.be/RpJ4UWDjyeU", quality = "720p") {
     const response = await fetch(`${base}/download`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, quality }) });
@@ -408,4 +408,34 @@ test("ytultra fallback: picks the free muxed 360p/audio link, skips locked HD, t
   assert.equal(job.actualQuality, "360p");
   assert.equal((await f.finish((await f.start("https://youtu.be/aaaaaaaaaaa")).jobId)).status, "failed");
   assert.equal(calls, 1);
+});
+
+test("relay chunk acks promptly when the visitor stops reading (no Heroku H12), and the agent is told to slow down", async (t) => {
+  const auth = { Authorization: "Bearer agent-secret" };
+  const f = await fixture(t, { env: { HOME_SECRET: "agent-secret", RELAY_DRAIN_WAIT_MS: "300" }, async run() { throw new Error("no local extraction"); } });
+  const firstPoll = fetch(`${f.base}/agent/next`, { headers: auth });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const started = await f.start();
+  const task = await (await firstPoll).json();
+  const info = { title: "Slow", duration: 10, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" };
+  await fetch(`${f.base}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, info }) });
+  const job = await f.finish(started.jobId);
+
+  const nextPoll = fetch(`${f.base}/agent/next`, { headers: auth });
+  // Visitor opens the link but never reads the body (a stalled client).
+  const controller = new AbortController();
+  const visitor = fetch(job.downloadUrl.replace(/^https?:\/\/[^/]+/, f.base), { signal: controller.signal }).catch(() => {});
+  const streamTask = await (await nextPoll).json();
+  const big = Buffer.alloc(8 * 1024 * 1024, 1);
+  const started2 = Date.now();
+  let slowSeen = false;
+  for (let seq = 0; seq < 6 && !slowSeen; seq++) {
+    const response = await fetch(`${f.base}/agent/chunk/${streamTask.streamId}?seq=${seq}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: big });
+    if (response.status !== 200) break;
+    slowSeen = Boolean((await response.json()).slow);
+  }
+  controller.abort();
+  await visitor;
+  assert.ok(slowSeen, "a stalled visitor must produce a slow ack");
+  assert.ok(Date.now() - started2 < 30000, "chunk requests must not hang while the visitor is stalled");
 });
