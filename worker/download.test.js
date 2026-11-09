@@ -7,6 +7,7 @@ import express from "express";
 import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { apifyExtract, apifyFormat, createApifyBudget } from "./apify-fallback.js";
+import { pickMedia, ytultraExtract } from "./ytultra-fallback.js";
 import { directLink, probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -372,4 +373,38 @@ test("a home-agent job for 360p exposes directUrl next to the relay link", async
   assert.equal(job.status, "completed");
   assert.match(job.directUrl, /googlevideo\.com\/videoplayback\?x=1&ratebypass=yes&title=Clip$/);
   assert.match(job.downloadUrl, /\/stream\//);
+});
+
+test("ytultra fallback: picks the free muxed 360p/audio link, skips locked HD, title from oEmbed", async (t) => {
+  const medias = [
+    { quality: "1080p", locked: true, url: null },
+    { quality: "240p", locked: false, url: "https://redirector.googlevideo.com/videoplayback?itag=18&ratebypass=yes" },
+    { quality: "144p", locked: false, url: "https://redirector.googlevideo.com/videoplayback?itag=140" },
+    { quality: "x", locked: false, url: "https://evil.example/videoplayback?itag=18" }
+  ];
+  assert.match(pickMedia(medias, "360p").url, /itag=18/);
+  assert.match(pickMedia(medias, "audio").url, /itag=140/);
+  assert.equal(pickMedia([{ locked: true, url: "https://redirector.googlevideo.com/x?itag=18" }], "360p"), null);
+
+  const fetcher = async (url) => String(url).includes("oembed")
+    ? { json: async () => ({ title: "My / Song" }) }
+    : { ok: true, json: async () => ({ code: "0000", data: { title: null, imageUrl: "https://i.ytimg.com/t.jpg", duration: null, medias } }) };
+  const result = await ytultraExtract({ videoId: "RpJ4UWDjyeU", quality: "720p", fetcher });
+  assert.equal(result.actualQuality, "360p");
+  assert.match(result.directUrl, /itag=18&ratebypass=yes&title=My%20_%20Song$/);
+  assert.equal(result.directUrl, result.downloadUrl);
+  await assert.rejects(ytultraExtract({ videoId: "RpJ4UWDjyeU", quality: "360p", fetcher: async () => ({ ok: true, json: async () => ({ code: "9999" }) }) }), /./);
+
+  let calls = 0;
+  const f = await fixture(t, {
+    env: { YTULTRA_FALLBACK: "true", YTULTRA_DAILY_LIMIT: "1" },
+    async run() { throw new Error("Sign in to confirm you're not a bot"); },
+    async ytultra() { calls++; return { title: "T", actualQuality: "360p", directUrl: "https://r.googlevideo.com/v?itag=18&title=T", downloadUrl: "https://r.googlevideo.com/v?itag=18&title=T" }; }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.viaYtultra, true);
+  assert.equal(job.actualQuality, "360p");
+  assert.equal((await f.finish((await f.start("https://youtu.be/aaaaaaaaaaa")).jobId)).status, "failed");
+  assert.equal(calls, 1);
 });

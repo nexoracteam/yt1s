@@ -8,13 +8,14 @@ import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromIn
 import { directLink, probeMedia, streamArgs, streamMedia } from "./stream-download.js";
 import { apifyExtract, createApifyBudget } from "./apify-fallback.js";
 import { createAgentRelay } from "./agent-relay.js";
+import { ytultraExtract } from "./ytultra-fallback.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DOWNLOAD_FAILED"]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, warpCheck, warpRotate, apify = apifyExtract, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
+  run = runCommand, warpCheck, warpRotate, apify = apifyExtract, ytultra = ytultraExtract, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
@@ -30,6 +31,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
   // current public URL here, so the sites can prefer it and fall back to this worker when it is offline.
   let home = { url: "", at: 0 };
   const apifyBudget = createApifyBudget(Number(env.APIFY_DAILY_LIMIT ?? 150));
+  const ytultraBudget = createApifyBudget(Number(env.YTULTRA_DAILY_LIMIT ?? 300));
   // The tunnel starts asynchronously (and may fail), so confirm it is really up, caching the answer briefly.
   let warpState = { at: 0, up: false };
   // When WARP itself gets bot-blocked, register a fresh WARP identity (new exit IP). Rate limited so a
@@ -238,6 +240,15 @@ export async function createWorker({ env = process.env, directory = path.join(__
           Object.assign(job, result, { viaApify: true, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
           return finishJob(job, startedAt);
         } catch { log(JSON.stringify({ event: "apify_failed", jobId: job.id })); }
+      }
+      // Last resort: permitted third-party extraction (direct CDN links, free formats only).
+      if (env.YTULTRA_FALLBACK === "true" && RETRY_CODES.has(failureCode(error)) && ytultraBudget.take()) {
+        try {
+          job.status = "retrying";
+          const result = await ytultra({ videoId: job.videoId, quality: job.quality });
+          Object.assign(job, result, { viaYtultra: true, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
+          return finishJob(job, startedAt);
+        } catch { log(JSON.stringify({ event: "ytultra_failed", jobId: job.id })); }
       }
       Object.assign(job, publicFailure(error), { status: "failed", failedAt: new Date().toISOString() });
       log(JSON.stringify({ event: "download_failed", jobId: job.id, code: job.code, elapsedMs: Date.now() - startedAt }));
