@@ -36,6 +36,11 @@ export default function Footer() {
           ))}
         </div>
       </div>
+      <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-gray-300">
+        <span className="font-black uppercase tracking-[0.2em] text-orange-200">Our other sites</span>
+        <a href="https://yt1s.ink" className="mx-2 font-bold text-white hover:text-orange-200">yt1s.ink</a>
+        <a href="https://yt1s.shop" className="mx-2 font-bold text-white hover:text-orange-200">yt1s.shop</a>
+      </div>
       <div className="border-t border-white/10 px-4 py-5 text-center text-xs text-gray-400">
         © 2026 {brand.name}. <Link href="/privacy" className="hover:text-white">Privacy Policy</Link> · <Link href="/cookie-policy" className="hover:text-white">Cookie Policy</Link> · <Link href="/terms" className="hover:text-white">Terms</Link> · <Link href="/dmca" className="hover:text-white">DMCA</Link> · <Link href="/contact" className="hover:text-white">Contact</Link>
       </div>
