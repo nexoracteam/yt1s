@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { AlertCircle, CheckCircle2, Clipboard, Download, Eye, Film, ImageDown, Loader2, Music2, RotateCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { extractVideoId, thumbnailSet, timestampUrl, toTimestampSeconds } from "../lib/youtube";
-import { DownloadError, safeDownloadMessage } from "../worker/download-errors";
+import { DOWNLOAD_ERRORS, DownloadError, safeDownloadMessage } from "../worker/download-errors";
 
 function directDownloadUrl(url) {
   try {
@@ -32,6 +32,28 @@ function canOpenDirect(url, audio) {
     media.onerror = () => finish(false);
     media.src = url;
   });
+}
+
+// When our own servers cannot prepare a video, offer a partner downloader. It is a third-party widget, so it is
+// clearly labelled, loaded only after a retryable failure, and sandboxed without popups (its ads open popunders).
+const alternativeCodes = ["SOURCE_BUSY", "TIMEOUT", "SERVICE_BUSY", "DELIVERY_UNAVAILABLE", "DOWNLOAD_FAILED"];
+const alternativeMessages = new Set(alternativeCodes.map((code) => DOWNLOAD_ERRORS[code]));
+
+function AlternativeDownloader({ videoId }) {
+  return (
+    <section aria-label="Alternative downloader" className="mt-6 rounded-3xl border border-white/10 bg-[#15151d] p-4 text-left sm:p-5">
+      <p className="text-sm font-black text-white">Our servers are busy right now. You can use this partner downloader instead.</p>
+      <p className="mt-1 text-xs leading-5 text-gray-400">It is operated by a third party outside this site, so ads or other pages may appear. Only download videos you own or have permission to save.</p>
+      <iframe
+        title="Alternative YouTube downloader (third party)"
+        src={`https://embed.dlsrv.online/v3/full?videoId=${encodeURIComponent(videoId)}`}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        className="mt-3 h-[560px] w-full rounded-2xl border-0 bg-white"
+      />
+    </section>
+  );
 }
 
 const statusLabels = {
@@ -394,6 +416,7 @@ export default function ToolClient({ tool }) {
       <p className={isDownload ? "mt-4 flex items-center justify-center gap-2 text-center text-xs text-gray-500 dark:text-gray-400" : "mt-3 text-center text-xs font-bold uppercase tracking-[0.24em] text-gray-500 dark:text-gray-400"}>{isDownload && <ShieldCheck className="h-4 w-4 text-emerald-500" />}{isDownload ? "Stream to your device · No video storage · No upload wait" : "Fast preview · Simple creator tools"}</p>
       {job && isDownload && <div role="status" aria-live="polite" className="mx-auto mt-6 max-w-4xl rounded-2xl border border-gray-200 bg-gray-50 p-4 text-sm font-semibold text-gray-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-gray-200"><span className="inline-flex items-center gap-2">{job.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : job.status === "failed" || error ? <AlertCircle className="h-4 w-4 text-amber-500" /> : <Loader2 className="h-4 w-4 animate-spin text-red-400" />}{error ? "Download paused. You can retry below." : statusLabels[job.status] || "Checking your download…"}</span>{job.status === "downloading" && Number.isFinite(job.progress) && <div className="mt-3"><progress aria-label="Download progress" value={job.progress} max="100" className="h-2 w-full accent-red-500" /><span>{job.progress}%</span></div>}</div>}
       {error && <div role="alert" className="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900"><p>{error}</p>{isDownload && <button type="button" disabled={loading} onClick={resumeId ? () => download(resumeId) : submit} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><RotateCcw className="h-4 w-4" />{resumeId ? "Check download status" : "Try again"}</button>}</div>}
+      {error && isDownload && alternativeMessages.has(error) && extractVideoId(input) && <AlternativeDownloader videoId={extractVideoId(input)} />}
       <div className="mt-10">
         {submitted && tool.mode === "thumbnail" && <ThumbnailResults input={input} />}
         {submitted && tool.mode === "generator" && <GeneratorResults tool={tool} input={input} />}
