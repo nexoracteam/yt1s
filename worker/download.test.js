@@ -349,15 +349,14 @@ test("home agent relay: extraction and streaming go through outbound-only agent 
   assert.equal((await fetch(`${f.base}/agent/next`, { headers: { Authorization: "Bearer wrong" } })).status, 401);
 });
 
-test("fast mode: direct link only for single-file 360p/audio, with a download filename", () => {
-  const muxed = { url: "https://r1.googlevideo.com/videoplayback?x=1", vcodec: "avc1", acodec: "mp4a", height: 360, title: "Me & the/zoo" };
-  assert.match(directLink(muxed, "360p"), /^https:\/\/r1\.googlevideo\.com\/videoplayback\?x=1&title=Me%20_%20the_zoo$/);
+test("fast mode: direct link only for the unthrottled muxed 360p file, with a download filename", () => {
+  const muxed = { url: "https://r1.googlevideo.com/videoplayback?x=1&ratebypass=yes", vcodec: "avc1", acodec: "mp4a", height: 360, title: "Me & the/zoo" };
+  assert.match(directLink(muxed, "360p"), /^https:\/\/r1\.googlevideo\.com\/videoplayback\?x=1&ratebypass=yes&title=Me%20_%20the_zoo$/);
   assert.equal(directLink(muxed, "720p"), "");
+  assert.equal(directLink(muxed, "audio"), "", "audio goes through the relay");
+  assert.equal(directLink({ ...muxed, url: "https://r1.googlevideo.com/videoplayback?x=1" }, "360p"), "", "throttled links are not offered");
   assert.equal(directLink({ ...muxed, requested_formats: [{}, {}] }, "360p"), "");
-  const audioOnly = { url: "https://r1.googlevideo.com/videoplayback?x=2", vcodec: "none", acodec: "mp4a", title: "Song" };
-  assert.match(directLink(audioOnly, "audio"), /title=Song$/);
-  assert.equal(directLink(muxed, "audio"), "", "audio request that fell back to a muxed format uses the relay");
-  assert.equal(directLink({ ...audioOnly, url: "https://evil.example/x" }, "audio"), "");
+  assert.equal(directLink({ ...muxed, url: "https://evil.example/x?ratebypass=yes" }, "360p"), "");
 });
 
 test("a home-agent job for 360p exposes directUrl next to the relay link", async (t) => {
@@ -367,10 +366,10 @@ test("a home-agent job for 360p exposes directUrl next to the relay link", async
   await new Promise((resolve) => setTimeout(resolve, 50));
   const started = await f.start("https://youtu.be/RpJ4UWDjyeU", "360p");
   const task = await (await firstPoll).json();
-  const info = { title: "Clip", duration: 10, height: 360, availability: "public", url: "https://r1.googlevideo.com/videoplayback?x=1", vcodec: "avc1", acodec: "mp4a" };
+  const info = { title: "Clip", duration: 10, height: 360, availability: "public", url: "https://r1.googlevideo.com/videoplayback?x=1&ratebypass=yes", vcodec: "avc1", acodec: "mp4a" };
   await fetch(`${f.base}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, info }) });
   const job = await f.finish(started.jobId);
   assert.equal(job.status, "completed");
-  assert.match(job.directUrl, /googlevideo\.com\/videoplayback\?x=1&title=Clip$/);
+  assert.match(job.directUrl, /googlevideo\.com\/videoplayback\?x=1&ratebypass=yes&title=Clip$/);
   assert.match(job.downloadUrl, /\/stream\//);
 });
