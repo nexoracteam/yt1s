@@ -133,6 +133,11 @@ export async function startRangedInputs(sources, { proxy, chunk = RANGE_CHUNK, r
   return { urls: sources.map((_, index) => `http://127.0.0.1:${port}/${index}`), close: () => { server.close(); server.closeAllConnections?.(); } };
 }
 
+// HLS manifests point at many segment URLs of their own, so they cannot go through the single-file ranged proxy.
+export function usesHls(info) {
+  return (info.requested_formats || [info]).some((input) => /m3u8/i.test(input.protocol || "") || /\.m3u8|\/manifest\//i.test(String(input.url || "")));
+}
+
 export function mediaSources(info) {
   return (info.requested_formats || [info]).map((input) => {
     const url = mediaUrl(input.url);
@@ -205,7 +210,7 @@ export function streamHeaders(info, quality) {
 
 export async function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnProcess = spawn, log = console.log, ranged = true } = {}) {
   let inputs = null;
-  if (ranged) {
+  if (ranged && !usesHls(info)) {
     try { inputs = await startRangedInputs(mediaSources(info), { proxy }); }
     catch { if (!res.headersSent) res.status(502).type("text/plain").send("This download link could not be opened. Return to the tool and generate a fresh link."); return; }
   }

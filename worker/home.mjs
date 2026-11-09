@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { DownloadError, failureCode } from "./download-errors.js";
 import { formatSelector, runCommand, ytDlpArgs } from "./download-support.js";
-import { mediaSources, startRangedInputs, streamArgs } from "./stream-download.js";
+import { mediaSources, startRangedInputs, streamArgs, usesHls } from "./stream-download.js";
 
 const server = (process.env.WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
 const secret = process.env.HOME_SECRET;
@@ -52,9 +52,11 @@ async function handleExtract(task) {
 
 async function handleStream(task) {
   const started = Date.now();
-  let inputs;
-  try { inputs = await startRangedInputs(mediaSources(task.info)); }
-  catch { await fetch(`${server}/agent/chunk/${task.streamId}?abort=1`, { method: "POST", headers: auth, signal: AbortSignal.timeout(10000) }).catch(() => {}); return; }
+  let inputs = { urls: undefined, close() {} };
+  if (!usesHls(task.info)) {
+    try { inputs = await startRangedInputs(mediaSources(task.info)); }
+    catch { await fetch(`${server}/agent/chunk/${task.streamId}?abort=1`, { method: "POST", headers: auth, signal: AbortSignal.timeout(10000) }).catch(() => {}); return; }
+  }
   const child = spawn("ffmpeg", streamArgs(task.info, task.quality, { inputUrls: inputs.urls }), { stdio: ["ignore", "pipe", "pipe"] });
   const url = `${server}/agent/chunk/${task.streamId}`;
   let pending = [], size = 0, total = 0, seq = 0, sending = false, closed = false, aborted = false, stderr = "";

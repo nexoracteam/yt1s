@@ -9,7 +9,7 @@ import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { apifyExtract, apifyFormat, createApifyBudget } from "./apify-fallback.js";
 import { pickMedia, ytultraExtract } from "./ytultra-fallback.js";
-import { startRangedInputs } from "./stream-download.js";
+import { startRangedInputs, usesHls } from "./stream-download.js";
 import { directLink, probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -465,4 +465,10 @@ test("ranged inputs: serves the whole file from short ranged requests, survives 
   assert.equal(seek.status, 206);
   assert.ok(Buffer.from(await seek.arrayBuffer()).equals(data.subarray(9000)));
   assert.deepEqual(streamArgs({ url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }, "360p", { inputUrls: ["http://127.0.0.1:1/0"] }).slice(-8, -6).length, 2);
+});
+
+test("HLS inputs bypass the ranged proxy, plain googlevideo files use it", () => {
+  assert.equal(usesHls({ url: "https://manifest.googlevideo.com/api/manifest/hls_playlist/x/index.m3u8" }), true);
+  assert.equal(usesHls({ url: "https://r1.googlevideo.com/videoplayback?x=1", protocol: "m3u8_native" }), true);
+  assert.equal(usesHls({ requested_formats: [{ url: "https://r1.googlevideo.com/videoplayback?a=1" }, { url: "https://r1.googlevideo.com/videoplayback?b=1" }] }), false);
 });
