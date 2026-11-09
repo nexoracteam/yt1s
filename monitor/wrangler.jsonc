@@ -1,0 +1,11 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "yt1s-monitor",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": { "crons": ["*/20 * * * *"] },
+  "kv_namespaces": [{ "binding": "STATE", "id": "65572dd408664781b9a6779b315a99ab" }],
+  "services": [{ "binding": "SHOP", "service": "yt1s-shop" }],
+  "observability": { "enabled": true }
+}
