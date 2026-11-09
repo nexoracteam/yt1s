@@ -2,6 +2,7 @@
 // Secrets (set with `wrangler secret put`): DISCORD_WEBHOOK_URL (alerts), RUN_KEY (manual /run trigger).
 
 const WORKER = "https://yt1s-worker-b6abf79b9888.herokuapp.com";
+const BACKUP = "https://yt1s-worker-eu-b88ee7e26698.herokuapp.com";
 const POLLS = 10;
 const POLL_MS = 6000;
 const REMIND_MS = 6 * 60 * 60 * 1000;
@@ -60,9 +61,9 @@ async function checkSite(site, env) {
   }
 }
 
-async function workerHealth() {
+async function workerHealth(base = WORKER) {
   try {
-    const health = await (await fetch(`${WORKER}/health`, { signal: AbortSignal.timeout(15000) })).json();
+    const health = await (await fetch(`${base}/health`, { signal: AbortSignal.timeout(15000) })).json();
     return { ok: Boolean(health.ok), warp: health.warp, agentOnline: health.agentOnline, cookies: health.healthyCookieAccounts, agent: health.agentOnline };
   } catch { return { ok: false }; }
 }
@@ -81,7 +82,7 @@ const describe = (health) => (health.ok
   : "Heroku worker ka /health jawab nahi de raha");
 
 async function run(env) {
-  const [health, first] = await Promise.all([workerHealth(), Promise.all(SITES.map((site) => checkSite(site, env)))]);
+  const [health, backup, first] = await Promise.all([workerHealth(), workerHealth(BACKUP), Promise.all(SITES.map((site) => checkSite(site, env)))]);
   let results = first;
   // One quick retry when a single site failed, to ignore a one-off blip. Skipped if several failed (a real outage).
   const failed = results.filter((r) => !r.ok);
@@ -102,16 +103,19 @@ async function run(env) {
     if (!r.ok && (!before || before.ok || now - (before.lastAlert || 0) > REMIND_MS)) { alerts.push(r); state[r.name].lastAlert = now; }
     if (r.ok && before && !before.ok) recoveries.push({ ...r, downMinutes: Math.round((now - before.since) / 60000) });
   }
-  if (!health.ok && (!previous?._worker_down)) { state._worker_down = true; alerts.push({ name: "Heroku worker", stage: "health", detail: "/health fail", seconds: 0 }); }
-  else if (health.ok && previous?._worker_down) recoveries.push({ name: "Heroku worker", detail: "wapas theek", downMinutes: 0 });
-  else if (!health.ok) state._worker_down = true;
+  // Both workers are watched: the main one (US) and the standby (EU) that the sites switch to automatically.
+  for (const [label, key, h] of [["Heroku worker (main, US)", "_worker_down", health], ["Heroku worker (standby, EU)", "_backup_down", backup]]) {
+    if (!h.ok && !previous?.[key]) { state[key] = true; alerts.push({ name: label, stage: "health", detail: "/health jawab nahi de raha", seconds: 0 }); }
+    else if (h.ok && previous?.[key]) recoveries.push({ name: label, detail: "wapas theek", downMinutes: 0 });
+    else if (!h.ok) state[key] = true;
+  }
 
   if (alerts.length) {
     await discord(env, {
       title: "🔴 Downloader fail ho raha hai",
       color: 0xe53935,
       description: alerts.map((r) => `**${r.name}** — stage \`${r.stage}\`: ${r.detail}`).join("\n"),
-      fields: [{ name: "Status", value: describe(health) }, { name: "Baaki sites", value: results.map((r) => `${r.ok ? "✅" : "❌"} ${r.name} (${r.seconds}s)`).join("\n") }]
+      fields: [{ name: "Status", value: describe(health) }, { name: "Standby (EU)", value: backup.ok ? "OK" : "DOWN" }, { name: "Baaki sites", value: results.map((r) => `${r.ok ? "✅" : "❌"} ${r.name} (${r.seconds}s)`).join("\n") }]
     });
   }
   if (recoveries.length) {

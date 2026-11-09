@@ -113,10 +113,24 @@ export async function createWorker({ env = process.env, directory = path.join(__
     log(JSON.stringify({ event: "download_complete", jobId: job.id, elapsedMs: Date.now() - startedAt, quality: job.actualQuality, fallback: Boolean(job.viaFallback) }));
   }
 
+  // Permitted third-party extraction (direct CDN links, free formats only). Enabled by YTULTRA_FALLBACK=true.
+  async function tryYtultra(job, startedAt) {
+    if (env.YTULTRA_FALLBACK !== "true" || !ytultraBudget.take()) return false;
+    try {
+      job.status = "retrying";
+      const result = await ytultra({ videoId: job.videoId, quality: job.quality });
+      Object.assign(job, result, { viaYtultra: true, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
+      finishJob(job, startedAt);
+      return true;
+    } catch { log(JSON.stringify({ event: "ytultra_failed", jobId: job.id })); return false; }
+  }
+
   async function processJob(job) {
     const jobDir = path.join(directory, job.id);
     const url = `https://www.youtube.com/watch?v=${job.videoId}`;
     const startedAt = Date.now();
+    // A standby worker on a blocked datacenter IP can set YTULTRA_FIRST=true to skip ~50s of attempts that always fail.
+    if (env.YTULTRA_FIRST === "true" && ["360p", "audio"].includes(job.quality) && !relay.online() && await tryYtultra(job, startedAt)) return;
     try {
       // YouTube applies different bot/PO-token checks to each player client. Rotate
       // bounded, known-compatible clients before trying the optional cookie session.
@@ -242,14 +256,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
         } catch { log(JSON.stringify({ event: "apify_failed", jobId: job.id })); }
       }
       // Last resort: permitted third-party extraction (direct CDN links, free formats only).
-      if (env.YTULTRA_FALLBACK === "true" && RETRY_CODES.has(failureCode(error)) && ytultraBudget.take()) {
-        try {
-          job.status = "retrying";
-          const result = await ytultra({ videoId: job.videoId, quality: job.quality });
-          Object.assign(job, result, { viaYtultra: true, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
-          return finishJob(job, startedAt);
-        } catch { log(JSON.stringify({ event: "ytultra_failed", jobId: job.id })); }
-      }
+      if (RETRY_CODES.has(failureCode(error)) && await tryYtultra(job, startedAt)) return;
       Object.assign(job, publicFailure(error), { status: "failed", failedAt: new Date().toISOString() });
       log(JSON.stringify({ event: "download_failed", jobId: job.id, code: job.code, elapsedMs: Date.now() - startedAt }));
     } finally {

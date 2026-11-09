@@ -10,6 +10,7 @@ function failure(code, status) {
 }
 
 const HEROKU_WORKER = (process.env.DOWNLOAD_WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
+const BACKUP_WORKER = (process.env.BACKUP_WORKER_URL || "https://yt1s-worker-eu-b88ee7e26698.herokuapp.com").replace(/\/$/, "");
 let homeCache = { url: null, at: 0 };
 
 // A worker on a home connection announces its tunnel URL to the always-on worker. Prefer it when it is online;
@@ -39,20 +40,50 @@ async function callWorker(base, path, options, timeoutMs) {
   return { response, data };
 }
 
+async function backupStart(videoId, quality) {
+  return callWorker(BACKUP_WORKER, "/download", { method: "POST", body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}`, quality }) }, 20000);
+}
+
 async function proxy(path, options = {}) {
   try {
-    const timeoutMs = options.method === "POST" ? 45000 : 30000;
+    const isPost = options.method === "POST";
+    const timeoutMs = isPost ? 45000 : 30000;
     let result;
     const home = await homeWorker();
     if (home) {
       // Short timeout: a dead home worker must not slow the visitor down.
       try {
-        const attempt = await callWorker(home, path, options, options.method === "POST" ? 8000 : 6000);
-        // 404 on a poll just means the job lives on the always-on worker.
-        if (attempt.data && typeof attempt.data === "object" && attempt.response.status < 500 && !(options.method !== "POST" && attempt.response.status === 404)) result = attempt;
+        const attempt = await callWorker(home, path, options, isPost ? 8000 : 6000);
+        // 404 on a poll just means the job lives on another worker.
+        if (attempt.data && typeof attempt.data === "object" && attempt.response.status < 500 && !(!isPost && attempt.response.status === 404)) result = attempt;
       } catch { homeCache = { url: null, at: Date.now() }; }
     }
-    if (!result) result = await callWorker(HEROKU_WORKER, path, options, timeoutMs);
+    if (!result) {
+      // Main worker first; if it is unreachable or erroring, the standby worker takes over.
+      let primary = null;
+      try { primary = await callWorker(HEROKU_WORKER, path, options, timeoutMs); } catch {}
+      const usable = primary?.data && typeof primary.data === "object" && primary.response.status < 500;
+      if (usable && (isPost || (primary.response.status !== 404 && primary.data.status !== "failed"))) {
+        result = primary;
+      } else if (BACKUP_WORKER && BACKUP_WORKER !== HEROKU_WORKER) {
+        try {
+          if (isPost) {
+            // Main worker down: start the job on the standby (its jobId is found there on later polls).
+            const started = await callWorker(BACKUP_WORKER, path, options, 20000);
+            result = started.data && started.response.status < 500 ? started : primary;
+          } else if (usable && primary.data.status === "failed" && primary.data.videoId && primary.data.quality) {
+            // The main worker tried everything and failed: give the standby a go (it dedupes repeated polls).
+            const retry = await backupStart(primary.data.videoId, primary.data.quality);
+            result = retry.data && retry.response.status < 500 ? { response: retry.response, data: { ...retry.data, id: retry.data.jobId || retry.data.id } } : primary;
+          } else {
+            // Unknown here (404) or main worker unreachable: the job may live on the standby.
+            const found = await callWorker(BACKUP_WORKER, path, options, 15000);
+            result = found.data && found.response.status < 500 ? found : primary;
+          }
+        } catch { result = primary; }
+      } else result = primary;
+    }
+    if (!result) return failure("SERVICE_BUSY", 503);
     const { response, data } = result;
     if (!data || typeof data !== "object") return failure("SERVICE_BUSY", 502);
     if (!response.ok || data.status === "failed" || data.error) {
@@ -61,7 +92,7 @@ async function proxy(path, options = {}) {
     // Do not forward unexpected diagnostics from old worker versions.
     const fields = ["jobId", "id", "videoId", "status", "quality", "actualQuality", "title", "thumbnail", "duration", "bytes", "estimatedBytes", "expiresAt", "downloadUrl", "directUrl", "previewUrl", "progress", "attempt", "cached", "createdAt", "completedAt", "failedAt", "code", "error", "retryable"];
     const out = Object.fromEntries(fields.filter((key) => Object.hasOwn(data, key)).map((key) => [key, data[key]]));
-    return NextResponse.json(out, { status: response.status, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(out, { status: response.ok ? response.status : (response.status || 503), headers: { "Cache-Control": "no-store" } });
   } catch {
     return failure("SERVICE_BUSY", 503);
   }

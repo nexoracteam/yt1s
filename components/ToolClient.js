@@ -12,7 +12,7 @@ function directDownloadUrl(url) {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return "";
-    if (parsed.hostname === "yt1s-worker-b6abf79b9888.herokuapp.com" && parsed.pathname.startsWith("/stream/")) return url;
+    if (/^yt1s-worker[a-z0-9-]*\.herokuapp\.com$/.test(parsed.hostname) && parsed.pathname.startsWith("/stream/")) return url;
     if (/^[a-z0-9-]+\.trycloudflare\.com$/.test(parsed.hostname) && parsed.protocol === "https:" && parsed.pathname.startsWith("/stream/")) return url;
     if (parsed.hostname.endsWith(".googlevideo.com") && parsed.pathname === "/videoplayback") return url;
     if (parsed.hostname !== "res.cloudinary.com") return "";
