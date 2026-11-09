@@ -12,7 +12,7 @@ const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DO
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, warpCheck, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
+  run = runCommand, warpCheck, warpRotate, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
@@ -24,7 +24,20 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const warpProxy = env.WARP_PROXY || "";
   // The tunnel starts asynchronously (and may fail), so confirm it is really up, caching the answer briefly.
   let warpState = { at: 0, up: false };
+  // When WARP itself gets bot-blocked, register a fresh WARP identity (new exit IP). Rate limited so a
+  // genuinely unavailable video cannot trigger endless re-registration.
+  let rotating = false, lastRotation = 0;
+  async function rotateWarp() {
+    if (!warpProxy || rotating || Date.now() - lastRotation < 5 * 60 * 1000) return;
+    rotating = true; lastRotation = Date.now();
+    try {
+      await (warpRotate || (() => runCommand("sh", [path.join(__dirname, "warp.sh")], { timeoutMs: 90000 })))();
+      log(JSON.stringify({ event: "warp_rotated" }));
+    } catch { log(JSON.stringify({ event: "warp_rotate_failed" })); }
+    finally { rotating = false; warpState = { at: 0, up: false }; }
+  }
   async function warpUp() {
+    if (rotating) return false;
     if (!warpProxy) return false;
     if (Date.now() - warpState.at < 30000) return warpState.up;
     const check = warpCheck || (async () => {
@@ -128,7 +141,11 @@ export async function createWorker({ env = process.env, directory = path.join(__
           // A bot block, or a session that no longer yields formats, sidelines that account for a while.
           if (cookiePath && (code === "SOURCE_BUSY" || code === "FORMAT_UNAVAILABLE")) cookies.markBlocked(cookiePath);
           log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code }));
-          if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) throw error;
+          if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) {
+            // Every WARP try ended in a bot block: that exit IP is burned, so rotate it for the next job.
+            if (code === "SOURCE_BUSY" && warpStrategies.length) void rotateWarp();
+            throw error;
+          }
           job.status = "retrying";
           await wait(1500 * (attempt + 1));
         } finally {

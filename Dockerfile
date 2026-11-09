@@ -1,7 +1,7 @@
 FROM node:22-bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip ca-certificates git curl \
+  && apt-get install -y --no-install-recommends ffmpeg python3 python3-pip ca-certificates git curl procps \
   && pip3 install --break-system-packages --no-cache-dir "yt-dlp[default] @ git+https://github.com/yt-dlp/yt-dlp.git@897341241f2bfb2439fe0367f4c7c9ccd29a3828" "bgutil-ytdlp-pot-provider==2.0.2" \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*

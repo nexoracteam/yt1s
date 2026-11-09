@@ -241,3 +241,16 @@ test("cookie strategies are skipped while every account cools down, and a fresh 
   assert.equal(again.status, "failed");
   assert.equal(calls, before, "failed video must not be re-extracted inside the failure cache window");
 });
+
+test("a job where every WARP try is bot-blocked rotates the WARP identity once", async (t) => {
+  let rotations = 0;
+  const f = await fixture(t, {
+    env: { WARP_PROXY: "http://127.0.0.1:40000" },
+    warpCheck: async () => true,
+    warpRotate: async () => { rotations++; },
+    async run() { throw new Error("Sign in to confirm you're not a bot"); }
+  });
+  assert.equal((await f.finish((await f.start()).jobId)).status, "failed");
+  assert.equal((await f.finish((await f.start("https://youtu.be/aaaaaaaaaaa")).jobId)).status, "failed");
+  assert.equal(rotations, 1, "rotation is rate limited");
+});
