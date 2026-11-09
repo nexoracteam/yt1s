@@ -134,13 +134,13 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.estimatedBytes = estimate;
           selectedInfo = info;
           selectedProxy = strategy.proxy;
-          if (cookiePath) cookies.markGood?.(cookiePath);
+          if (cookiePath) { cookies.markGood?.(cookiePath); log(JSON.stringify({ event: "cookie_ok", jobId: job.id, strategy: strategy.name, account: cookies.accountOf?.(cookiePath) })); }
           break;
         } catch (error) {
           const code = failureCode(error);
           // A bot block, or a session that no longer yields formats, sidelines that account for a while.
           if (cookiePath && (code === "SOURCE_BUSY" || code === "FORMAT_UNAVAILABLE")) cookies.markBlocked(cookiePath);
-          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code }));
+          log(JSON.stringify({ event: "download_attempt", jobId: job.id, attempt: attempt + 1, strategy: strategies[attempt].name, stage, code, account: cookies.accountOf?.(cookiePath) }));
           if (!RETRY_CODES.has(code) || attempt === strategies.length - 1) {
             // Every WARP try ended in a bot block: that exit IP is burned, so rotate it for the next job.
             if (code === "SOURCE_BUSY" && warpStrategies.length) void rotateWarp();

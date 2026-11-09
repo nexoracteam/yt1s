@@ -102,6 +102,7 @@ export async function createCookieStore(directory, env, now = () => Date.now()) 
       const account = leases.get(cookiePath);
       if (account) { account.strikes = 0; account.blockedUntil = 0; }
     },
+    accountOf(cookiePath) { return leases.get(cookiePath)?.index; },
     release(cookiePath) { leases.delete(cookiePath); }
   };
 }
