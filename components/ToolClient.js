@@ -14,9 +14,24 @@ function directDownloadUrl(url) {
     if (parsed.protocol !== "https:") return "";
     if (parsed.hostname === "yt1s-worker-b6abf79b9888.herokuapp.com" && parsed.pathname.startsWith("/stream/")) return url;
     if (/^[a-z0-9-]+\.trycloudflare\.com$/.test(parsed.hostname) && parsed.protocol === "https:" && parsed.pathname.startsWith("/stream/")) return url;
+    if (parsed.hostname.endsWith(".googlevideo.com") && parsed.pathname === "/videoplayback") return url;
     if (parsed.hostname !== "res.cloudinary.com") return "";
     return url.includes("/fl_attachment/") ? url : url.replace("/upload/", "/upload/fl_attachment/");
   } catch { return ""; }
+}
+
+// Fast mode: 360p/audio can come straight from YouTube's CDN. Check that the visitor's connection really can
+// open that link (loading just the metadata); if not, the relay link is used instead.
+function canOpenDirect(url, audio) {
+  return new Promise((resolve) => {
+    const media = document.createElement(audio ? "audio" : "video");
+    const finish = (ok) => { clearTimeout(timer); media.removeAttribute("src"); media.load(); resolve(ok); };
+    const timer = setTimeout(() => finish(false), 8000);
+    media.preload = "metadata";
+    media.onloadedmetadata = () => finish(true);
+    media.onerror = () => finish(false);
+    media.src = url;
+  });
 }
 
 const statusLabels = {
@@ -290,9 +305,12 @@ export default function ToolClient({ tool }) {
       const result = start.status === "completed" ? start : await poll(start.jobId, controller.signal);
       setResumeId("");
       if (result.status === "failed") throw new Error(safeDownloadMessage(result));
-      setDownloadResult(result);
-      setJob(result);
-      const url = directDownloadUrl(result.downloadUrl);
+      let chosen = result;
+      const direct = result.directUrl ? directDownloadUrl(result.directUrl) : "";
+      if (direct && await canOpenDirect(direct, result.quality === "audio")) chosen = { ...result, downloadUrl: direct };
+      setDownloadResult(chosen);
+      setJob(chosen);
+      const url = directDownloadUrl(chosen.downloadUrl);
       if (!url) throw new DownloadError("DELIVERY_UNAVAILABLE");
       const link = document.createElement("a");
       link.href = url;

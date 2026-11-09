@@ -96,6 +96,21 @@ export function streamArgs(info, quality, { proxy } = {}) {
   return [...args, ...fragment, "-f", "mp4", "pipe:1"];
 }
 
+// Fast mode: for 360p and audio the extracted format is a single plain file, so the visitor's browser can fetch it
+// straight from YouTube's CDN. `&title=` makes googlevideo answer with Content-Disposition: attachment, so the
+// browser saves it instead of playing it. HD merges two tracks and always goes through the relay.
+export function directLink(info, quality) {
+  if (!["360p", "audio"].includes(quality) || info.requested_formats) return "";
+  const url = mediaUrl(info.url);
+  if (!url) return "";
+  const hasVideo = info.vcodec && info.vcodec !== "none";
+  const hasAudio = info.acodec && info.acodec !== "none";
+  if (quality === "audio" ? (hasVideo || !hasAudio) : !(hasVideo && hasAudio)) return "";
+  if (quality === "360p" && Number(info.height || 360) > 480) return "";
+  const title = String(info.title || "video").replace(/[\r\n/\\<>:"|?*&%#+]/g, "_").slice(0, 100);
+  return `${url}&title=${encodeURIComponent(title)}`;
+}
+
 export function streamHeaders(info, quality) {
   const filename = `${String(info.title || "video").replace(/[\r\n/\\<>:"|?*]/g, "_").slice(0, 100)}.${quality === "audio" ? "m4a" : "mp4"}`;
   return {

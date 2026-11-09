@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import { DownloadError, failureCode, publicFailure } from "./download-errors.js";
 import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
-import { probeMedia, streamArgs, streamMedia } from "./stream-download.js";
+import { directLink, probeMedia, streamArgs, streamMedia } from "./stream-download.js";
 import { apifyExtract, createApifyBudget } from "./apify-fallback.js";
 import { createAgentRelay } from "./agent-relay.js";
 
@@ -162,6 +162,8 @@ export async function createWorker({ env = process.env, directory = path.join(__
           job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
           job.estimatedBytes = estimate;
           selectedInfo = info; viaHome = true;
+          // Only home-IP extractions get a direct link; the site checks that it opens and otherwise uses the relay.
+          job.directUrl = directLink(info, job.quality) || undefined;
         } catch (error) {
           const code = failureCode(error);
           log(JSON.stringify({ event: "home_extract_failed", jobId: job.id, code }));

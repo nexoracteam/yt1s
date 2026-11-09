@@ -7,7 +7,7 @@ import express from "express";
 import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { apifyExtract, apifyFormat, createApifyBudget } from "./apify-fallback.js";
-import { probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
+import { directLink, probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
 
@@ -347,4 +347,30 @@ test("home agent relay: extraction and streaming go through outbound-only agent 
   assert.equal(response.headers.get("content-type"), "video/mp4");
   assert.equal(await response.text(), "FAKE-MP4-BYTES");
   assert.equal((await fetch(`${f.base}/agent/next`, { headers: { Authorization: "Bearer wrong" } })).status, 401);
+});
+
+test("fast mode: direct link only for single-file 360p/audio, with a download filename", () => {
+  const muxed = { url: "https://r1.googlevideo.com/videoplayback?x=1", vcodec: "avc1", acodec: "mp4a", height: 360, title: "Me & the/zoo" };
+  assert.match(directLink(muxed, "360p"), /^https:\/\/r1\.googlevideo\.com\/videoplayback\?x=1&title=Me%20_%20the_zoo$/);
+  assert.equal(directLink(muxed, "720p"), "");
+  assert.equal(directLink({ ...muxed, requested_formats: [{}, {}] }, "360p"), "");
+  const audioOnly = { url: "https://r1.googlevideo.com/videoplayback?x=2", vcodec: "none", acodec: "mp4a", title: "Song" };
+  assert.match(directLink(audioOnly, "audio"), /title=Song$/);
+  assert.equal(directLink(muxed, "audio"), "", "audio request that fell back to a muxed format uses the relay");
+  assert.equal(directLink({ ...audioOnly, url: "https://evil.example/x" }, "audio"), "");
+});
+
+test("a home-agent job for 360p exposes directUrl next to the relay link", async (t) => {
+  const auth = { Authorization: "Bearer agent-secret" };
+  const f = await fixture(t, { env: { HOME_SECRET: "agent-secret" }, async run() { throw new Error("no local extraction"); } });
+  const firstPoll = fetch(`${f.base}/agent/next`, { headers: auth });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const started = await f.start("https://youtu.be/RpJ4UWDjyeU", "360p");
+  const task = await (await firstPoll).json();
+  const info = { title: "Clip", duration: 10, height: 360, availability: "public", url: "https://r1.googlevideo.com/videoplayback?x=1", vcodec: "avc1", acodec: "mp4a" };
+  await fetch(`${f.base}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, info }) });
+  const job = await f.finish(started.jobId);
+  assert.equal(job.status, "completed");
+  assert.match(job.directUrl, /googlevideo\.com\/videoplayback\?x=1&title=Clip$/);
+  assert.match(job.downloadUrl, /\/stream\//);
 });
