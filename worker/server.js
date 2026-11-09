@@ -6,13 +6,14 @@ import { nanoid } from "nanoid";
 import { DownloadError, failureCode, publicFailure } from "./download-errors.js";
 import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
 import { probeMedia, streamArgs, streamMedia } from "./stream-download.js";
+import { apifyExtract, createApifyBudget } from "./apify-fallback.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DOWNLOAD_FAILED"]);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function createWorker({ env = process.env, directory = path.join(__dirname, "downloads"),
-  run = runCommand, warpCheck, warpRotate, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
+  run = runCommand, warpCheck, warpRotate, apify = apifyExtract, stream = streamMedia, probe = probeMedia, wait = sleep, log = console.log } = {}) {
   await mkdir(directory, { recursive: true });
   const cookies = await createCookieStore(directory, env);
   const maxDuration = Number(env.MAX_DURATION_SECONDS || 1800);
@@ -27,6 +28,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
   // Home worker registry: a worker on a home connection (behind a Cloudflare quick tunnel) announces its
   // current public URL here, so the sites can prefer it and fall back to this worker when it is offline.
   let home = { url: "", at: 0 };
+  const apifyBudget = createApifyBudget(Number(env.APIFY_DAILY_LIMIT ?? 150));
   // The tunnel starts asynchronously (and may fail), so confirm it is really up, caching the answer briefly.
   let warpState = { at: 0, up: false };
   // When WARP itself gets bot-blocked, register a fresh WARP identity (new exit IP). Rate limited so a
@@ -202,6 +204,15 @@ export async function createWorker({ env = process.env, directory = path.join(__
         try { job.status = "retrying"; await delegate(job); return finishJob(job, startedAt); }
         catch { log(JSON.stringify({ event: "fallback_failed", jobId: job.id })); }
       }
+      // Paid last resort, only when a token is configured and today's budget allows it.
+      if (env.APIFY_TOKEN && RETRY_CODES.has(failureCode(error)) && apifyBudget.take()) {
+        try {
+          job.status = "retrying";
+          const result = await apify({ token: env.APIFY_TOKEN, videoId: job.videoId, quality: job.quality });
+          Object.assign(job, result, { viaApify: true, expiresAt: new Date(Date.now() + ttlMs).toISOString() });
+          return finishJob(job, startedAt);
+        } catch { log(JSON.stringify({ event: "apify_failed", jobId: job.id })); }
+      }
       Object.assign(job, publicFailure(error), { status: "failed", failedAt: new Date().toISOString() });
       log(JSON.stringify({ event: "download_failed", jobId: job.id, code: job.code, elapsedMs: Date.now() - startedAt }));
     } finally {
@@ -231,7 +242,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
   app.post("/home/register", (req, res) => {
     const url = String(req.body?.url || "");
     if (!env.HOME_SECRET || req.headers.authorization !== `Bearer ${env.HOME_SECRET}`) return res.status(401).json({ ok: false });
-    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url)) return res.status(400).json({ ok: false });
+    if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/?$/.test(url) || /^https:\/\/api\./.test(url)) return res.status(400).json({ ok: false });
     home = { url: url.replace(/\/$/, ""), at: Date.now() };
     res.json({ ok: true });
   });

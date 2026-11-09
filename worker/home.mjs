@@ -28,7 +28,10 @@ async function register() {
 function startTunnel() {
   const child = spawn(process.env.CLOUDFLARED_BIN || "cloudflared", ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${port}`], { stdio: ["ignore", "ignore", "pipe"] });
   child.stderr.on("data", (chunk) => {
-    const match = String(chunk).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    const text = String(chunk);
+    if (/(ERR|WRN)/.test(text)) console.error("cloudflared:", text.replace(/\s+/g, " ").slice(0, 300));
+    // cloudflared also prints its own API address (api.trycloudflare.com); only the assigned tunnel counts.
+    const match = [...text.matchAll(/https:\/\/([a-z0-9-]+)\.trycloudflare\.com/g)].find((m) => m[1] !== "api");
     if (match && process.env.PUBLIC_WORKER_URL !== match[0]) {
       process.env.PUBLIC_WORKER_URL = match[0];
       console.log("tunnel up:", match[0]);

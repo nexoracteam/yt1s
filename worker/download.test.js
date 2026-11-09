@@ -6,6 +6,7 @@ import path from "node:path";
 import express from "express";
 import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
+import { apifyExtract, apifyFormat, createApifyBudget } from "./apify-fallback.js";
 import { probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -281,4 +282,32 @@ test("home worker registry needs the secret, accepts only tunnel URLs and expire
   assert.equal((await post({ url: "https://evil.example.com" })).status, 400);
   assert.equal((await post({ url: "https://abc-def.trycloudflare.com" })).status, 200);
   assert.deepEqual(await (await fetch(`${f.base}/home`)).json(), { url: "https://abc-def.trycloudflare.com" });
+});
+
+test("Apify is a paid last resort: used only with a token, mapped formats, daily budget enforced", async (t) => {
+  assert.equal(apifyFormat("audio"), "mp3");
+  assert.equal(apifyFormat("1080p"), "1080");
+  const budget = createApifyBudget(2, () => new Date("2026-11-09T10:00:00Z"));
+  assert.deepEqual([budget.take(), budget.take(), budget.take()], [true, true, false]);
+  let body;
+  const out = await apifyExtract({ token: "tok", videoId: "dQw4w9WgXcQ", quality: "720p", fetcher: async (url, options) => {
+    body = JSON.parse(options.body);
+    assert.equal(options.headers.Authorization, "Bearer tok");
+    return { ok: true, json: async () => [{ title: "T", thumbnailUrl: "https://i.example/t.jpg", downloadUrl: "https://files.example/v.mp4", status: "ready" }] };
+  } });
+  assert.equal(body.format, "720");
+  assert.equal(out.downloadUrl, "https://files.example/v.mp4");
+
+  let calls = 0;
+  const f = await fixture(t, {
+    env: { APIFY_TOKEN: "tok", APIFY_DAILY_LIMIT: "1" },
+    async run() { throw new Error("Sign in to confirm you're not a bot"); },
+    async apify() { calls++; return { title: "T", downloadUrl: "https://files.example/v.mp4", actualQuality: "720p" }; }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.viaApify, true);
+  const second = await f.finish((await f.start("https://youtu.be/aaaaaaaaaaa")).jobId);
+  assert.equal(second.status, "failed");
+  assert.equal(calls, 1);
 });
