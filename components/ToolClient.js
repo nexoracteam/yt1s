@@ -329,7 +329,12 @@ export default function ToolClient({ tool }) {
       if (result.status === "failed") throw new Error(safeDownloadMessage(result));
       let chosen = result;
       const direct = result.directUrl ? directDownloadUrl(result.directUrl) : "";
-      if (direct && await canOpenDirect(direct, result.quality === "audio")) chosen = { ...result, downloadUrl: direct };
+      if (direct) {
+        if (await canOpenDirect(direct, result.quality === "audio")) chosen = { ...result, downloadUrl: direct };
+        // Some direct links are tied to the IP that extracted them and answer 403 for this visitor. If there is no
+        // separate relay link to fall back to, treat it as a failed download so the partner downloader is offered.
+        else if (result.downloadUrl === result.directUrl) throw new DownloadError("DELIVERY_UNAVAILABLE");
+      }
       setDownloadResult(chosen);
       setJob(chosen);
       const url = directDownloadUrl(chosen.downloadUrl);

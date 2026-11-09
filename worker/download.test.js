@@ -1,3 +1,4 @@
+import http from "node:http";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, rm, readdir } from "node:fs/promises";
@@ -8,6 +9,7 @@ import { createWorker } from "./server.js";
 import { createCookieStore, runCommand, videoIdFromInput, formatSelector, ytDlpArgs } from "./download-support.js";
 import { apifyExtract, apifyFormat, createApifyBudget } from "./apify-fallback.js";
 import { pickMedia, ytultraExtract } from "./ytultra-fallback.js";
+import { startRangedInputs } from "./stream-download.js";
 import { directLink, probeMedia, streamArgs, mediaHeaders, mediaUrl } from "./stream-download.js";
 
 const cookie = (value) => `# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`;
@@ -438,4 +440,29 @@ test("relay chunk acks promptly when the visitor stops reading (no Heroku H12), 
   await visitor;
   assert.ok(slowSeen, "a stalled visitor must produce a slow ack");
   assert.ok(Date.now() - started2 < 30000, "chunk requests must not hang while the visitor is stalled");
+});
+
+test("ranged inputs: serves the whole file from short ranged requests, survives a 403, honours a seek", async (t) => {
+  const data = Buffer.from(Array.from({ length: 10500 }, (_, i) => i % 251));
+  let ranges = 0, failedOnce = false;
+  const origin = http.createServer((req, res) => {
+    const match = /bytes=(\d+)-(\d+)/.exec(req.headers.range || "");
+    if (!match) { res.writeHead(400).end(); return; }
+    if (Number(match[1]) === 4000 && !failedOnce) { failedOnce = true; res.writeHead(403).end(); return; }
+    ranges++;
+    const start = Number(match[1]), end = Math.min(Number(match[2]), data.length - 1);
+    res.writeHead(206, { "Content-Range": `bytes ${start}-${end}/${data.length}`, "Content-Length": end - start + 1 });
+    res.end(data.subarray(start, end + 1));
+  });
+  await new Promise((resolve) => origin.listen(0, "127.0.0.1", resolve));
+  const inputs = await startRangedInputs([{ url: `http://127.0.0.1:${origin.address().port}/f`, headers: {} }], { chunk: 2000, retries: 2 });
+  t.after(() => { inputs.close(); origin.close(); origin.closeAllConnections?.(); });
+  const whole = Buffer.from(await (await fetch(inputs.urls[0])).arrayBuffer());
+  assert.equal(whole.length, data.length);
+  assert.ok(whole.equals(data), "reassembled bytes must equal the origin file");
+  assert.ok(ranges >= 5, "file is fetched in several short ranges, not one long request");
+  const seek = await fetch(inputs.urls[0], { headers: { Range: "bytes=9000-" } });
+  assert.equal(seek.status, 206);
+  assert.ok(Buffer.from(await seek.arrayBuffer()).equals(data.subarray(9000)));
+  assert.deepEqual(streamArgs({ url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }, "360p", { inputUrls: ["http://127.0.0.1:1/0"] }).slice(-8, -6).length, 2);
 });

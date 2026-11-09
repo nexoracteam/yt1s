@@ -9,6 +9,7 @@
   "dependencies": {
     "cloudinary": "^2.5.1",
     "express": "^4.21.2",
-    "nanoid": "^5.0.9"
+    "nanoid": "^5.0.9",
+    "undici": "^8.12.4"
   }
 }

@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import http from "node:http";
+import { once } from "node:events";
 import { DownloadError } from "./download-errors.js";
 
 export function mediaUrl(value) {
@@ -59,6 +61,86 @@ export async function probeMedia(info, { fetcher, proxy, timeoutMs = 15000, spaw
   }
 }
 
+// YouTube throttles a single long request for DASH/audio streams to roughly real-time speed and may end it early
+// without an error. yt-dlp avoids this by reading the file in short ranged requests. ffmpeg cannot, so a tiny
+// loopback server in front of it does the same: ffmpeg reads http://127.0.0.1:<port>/<n>, and each read is served from
+// sequential 8 MB ranged requests (with retries) to the real URL, optionally through a proxy.
+const RANGE_CHUNK = 8 * 1024 * 1024;
+let undiciModule;
+
+async function fetcherFor(proxy) {
+  if (!proxy) return { run: (url, init) => fetch(url, init) };
+  undiciModule ||= await import("undici");
+  const dispatcher = new undiciModule.ProxyAgent(proxy);
+  return { run: (url, init) => undiciModule.fetch(url, { ...init, dispatcher }) };
+}
+
+export async function startRangedInputs(sources, { proxy, chunk = RANGE_CHUNK, retries = 3, fetcher } = {}) {
+  const transport = fetcher ? { run: fetcher } : await fetcherFor(proxy);
+  const sizes = new Map();
+  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  async function ranged(source, start, end) {
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await transport.run(source.url, { headers: { ...source.headers, Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout(60000) });
+        if (response.status === 206 || response.status === 200) return response;
+        await response.body?.cancel().catch(() => {});
+        lastError = new Error(`HTTP ${response.status}`);
+      } catch (error) { lastError = error; }
+      await pause(300 * (attempt + 1));
+    }
+    throw lastError;
+  }
+
+  async function sizeOf(source) {
+    if (sizes.has(source)) return sizes.get(source);
+    const response = await ranged(source, 0, 0);
+    await response.body?.cancel().catch(() => {});
+    const total = Number((/\/(\d+)\s*$/.exec(response.headers.get("content-range") || "") || [])[1]);
+    if (!Number.isFinite(total) || total <= 0) throw new Error("unknown size");
+    sizes.set(source, total);
+    return total;
+  }
+
+  const server = http.createServer(async (req, res) => {
+    const source = sources[Number(String(req.url).split("/").pop())];
+    if (!source) { res.writeHead(404).end(); return; }
+    let gone = false;
+    res.on("close", () => { gone = true; });
+    try {
+      const size = await sizeOf(source);
+      const match = /bytes=(\d+)-/.exec(req.headers.range || "");
+      const start = match ? Math.min(Number(match[1]), size) : 0;
+      res.writeHead(match ? 206 : 200, {
+        "Content-Type": "application/octet-stream", "Accept-Ranges": "bytes", "Content-Length": size - start,
+        ...(match ? { "Content-Range": `bytes ${start}-${size - 1}/${size}` } : {})
+      });
+      if (req.method === "HEAD") { res.end(); return; }
+      for (let position = start; position < size && !gone; position += chunk) {
+        const response = await ranged(source, position, Math.min(position + chunk, size) - 1);
+        for await (const part of response.body) {
+          if (gone) break;
+          if (!res.write(part)) await once(res, "drain");
+        }
+      }
+      res.end();
+    } catch { res.destroy(); }
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = server.address().port;
+  return { urls: sources.map((_, index) => `http://127.0.0.1:${port}/${index}`), close: () => { server.close(); server.closeAllConnections?.(); } };
+}
+
+export function mediaSources(info) {
+  return (info.requested_formats || [info]).map((input) => {
+    const url = mediaUrl(input.url);
+    if (!url) throw new DownloadError("FORMAT_UNAVAILABLE");
+    return { url, headers: Object.fromEntries(mediaHeaderEntries(input.http_headers || info.http_headers)) };
+  });
+}
+
 function streamFailure(stderr) {
   if (/\b403\b|forbidden/i.test(stderr)) return "UPSTREAM_403";
   if (/\b429\b|too many requests/i.test(stderr)) return "UPSTREAM_429";
@@ -67,16 +149,17 @@ function streamFailure(stderr) {
   return "STREAM_FAILED";
 }
 
-export function streamArgs(info, quality, { proxy } = {}) {
+export function streamArgs(info, quality, { proxy, inputUrls } = {}) {
   const inputs = info.requested_formats || [info];
   const args = ["-hide_banner", "-loglevel", "error", "-nostdin"];
-  for (const input of inputs) {
-    const url = mediaUrl(input.url);
+  for (const [index, input] of inputs.entries()) {
+    const url = inputUrls ? inputUrls[index] : mediaUrl(input.url);
     if (!url) throw new DownloadError("FORMAT_UNAVAILABLE");
     args.push("-protocol_whitelist", "https,tls,tcp,crypto,http,httpproxy", "-rw_timeout", "20000000", "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "3");
     // Media URLs are bound to the IP that extracted them, so a WARP-extracted link must also stream through WARP.
-    if (proxy) args.push("-http_proxy", proxy);
-    const headers = mediaHeaders(input.http_headers || info.http_headers);
+    // (With loopback inputs the ranged proxy already handles the proxy and the headers.)
+    if (proxy && !inputUrls) args.push("-http_proxy", proxy);
+    const headers = inputUrls ? "" : mediaHeaders(input.http_headers || info.http_headers);
     if (headers) args.push("-headers", headers);
     args.push("-i", url);
   }
@@ -120,8 +203,13 @@ export function streamHeaders(info, quality) {
   };
 }
 
-export function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnProcess = spawn, log = console.log } = {}) {
-  const args = streamArgs(info, quality, { proxy });
+export async function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnProcess = spawn, log = console.log, ranged = true } = {}) {
+  let inputs = null;
+  if (ranged) {
+    try { inputs = await startRangedInputs(mediaSources(info), { proxy }); }
+    catch { if (!res.headersSent) res.status(502).type("text/plain").send("This download link could not be opened. Return to the tool and generate a fresh link."); return; }
+  }
+  const args = streamArgs(info, quality, inputs ? { inputUrls: inputs.urls } : { proxy });
   const child = spawnProcess("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   let bytes = 0, started = false, finished = false, stderr = "";
   const filename = `${String(info.title || "video").replace(/[\r\n/\\<>:"|?*]/g, "_").slice(0, 100)}.${quality === "audio" ? "m4a" : "mp4"}`;
@@ -152,6 +240,7 @@ export function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnPro
   child.once("error", fail);
   return new Promise((resolve) => child.once("close", (code) => {
     finished = true;
+    inputs?.close();
     clearTimeout(timer);
     clearTimeout(firstByteTimer);
     res.removeListener("close", stop);

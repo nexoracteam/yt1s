@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { DownloadError, failureCode } from "./download-errors.js";
 import { formatSelector, runCommand, ytDlpArgs } from "./download-support.js";
-import { streamArgs } from "./stream-download.js";
+import { mediaSources, startRangedInputs, streamArgs } from "./stream-download.js";
 
 const server = (process.env.WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
 const secret = process.env.HOME_SECRET;
@@ -52,7 +52,10 @@ async function handleExtract(task) {
 
 async function handleStream(task) {
   const started = Date.now();
-  const child = spawn("ffmpeg", streamArgs(task.info, task.quality), { stdio: ["ignore", "pipe", "pipe"] });
+  let inputs;
+  try { inputs = await startRangedInputs(mediaSources(task.info)); }
+  catch { await fetch(`${server}/agent/chunk/${task.streamId}?abort=1`, { method: "POST", headers: auth, signal: AbortSignal.timeout(10000) }).catch(() => {}); return; }
+  const child = spawn("ffmpeg", streamArgs(task.info, task.quality, { inputUrls: inputs.urls }), { stdio: ["ignore", "pipe", "pipe"] });
   const url = `${server}/agent/chunk/${task.streamId}`;
   let pending = [], size = 0, total = 0, seq = 0, sending = false, closed = false, aborted = false, stderr = "";
   child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-1500); });
@@ -80,7 +83,7 @@ async function handleStream(task) {
     if (size >= 1024 * 1024) void flush();
     if (size >= 8 * 1024 * 1024) child.stdout.pause();
   });
-  await new Promise((resolve) => child.once("close", (code) => { closed = true; clearInterval(timer); aborted = aborted || code !== 0; resolve(); }));
+  await new Promise((resolve) => child.once("close", (code) => { closed = true; clearInterval(timer); inputs.close(); aborted = aborted || code !== 0; resolve(); }));
   while (sending) await sleep(50);
   if (aborted) {
     await fetch(`${url}?abort=1`, { method: "POST", headers: auth, signal: AbortSignal.timeout(10000) }).catch(() => {});
