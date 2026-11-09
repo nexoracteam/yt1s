@@ -130,7 +130,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const url = `https://www.youtube.com/watch?v=${job.videoId}`;
     const startedAt = Date.now();
     // A standby worker on a blocked datacenter IP can set YTULTRA_FIRST=true to skip ~50s of attempts that always fail.
-    if (env.YTULTRA_FIRST === "true" && ["360p", "audio"].includes(job.quality) && !relay.online() && await tryYtultra(job, startedAt)) return;
+    if (env.YTULTRA_FIRST === "true" && job.quality !== "audio" && !relay.online() && await tryYtultra(job, startedAt)) return;
     try {
       // YouTube applies different bot/PO-token checks to each player client. Rotate
       // bounded, known-compatible clients before trying the optional cookie session.

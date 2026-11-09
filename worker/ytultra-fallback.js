@@ -2,7 +2,7 @@ import { DownloadError } from "./download-errors.js";
 
 // Extra fallback: the ytultra extraction API (used with its owner's permission). It extracts from its own pool of
 // consumer IPs and returns direct YouTube CDN links, so nothing streams through this server. It only serves
-// free-tier formats (muxed 360p and m4a audio); HD entries come back locked, so they are skipped.
+// free-tier formats (muxed 360p); HD entries come back locked, so they are skipped.
 // Enabled with YTULTRA_FALLBACK=true and capped per UTC day. It runs only after every other route has failed.
 const ENDPOINT = "https://api.ytultra.com/ikool/youtube/download";
 
@@ -22,6 +22,8 @@ async function youtubeTitle(videoId, fetcher) {
 }
 
 export async function ytultraExtract({ videoId, quality, fetcher = fetch, timeoutMs = 45000 }) {
+  // Its audio-only links are IP-bound and often answer 403 for the visitor, so only the muxed 360p file is used.
+  if (quality === "audio") throw new DownloadError("FORMAT_UNAVAILABLE");
   let response;
   try {
     response = await fetcher(ENDPOINT, {
@@ -41,7 +43,7 @@ export async function ytultraExtract({ videoId, quality, fetcher = fetch, timeou
   return {
     title, thumbnail: body.data.imageUrl || undefined, duration: Number(body.data.duration) || undefined,
     // Asked for HD but only the free 360p exists: say so honestly instead of failing.
-    actualQuality: quality === "audio" ? "audio" : "360p",
+    actualQuality: "360p",
     directUrl: link, downloadUrl: link
   };
 }

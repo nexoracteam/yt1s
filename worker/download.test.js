@@ -384,6 +384,7 @@ test("ytultra fallback: picks the free muxed 360p/audio link, skips locked HD, t
   ];
   assert.match(pickMedia(medias, "360p").url, /itag=18/);
   assert.match(pickMedia(medias, "audio").url, /itag=140/);
+  await assert.rejects(ytultraExtract({ videoId: "RpJ4UWDjyeU", quality: "audio", fetcher: async () => { throw new Error("must not call the API for audio"); } }), /./);
   assert.equal(pickMedia([{ locked: true, url: "https://redirector.googlevideo.com/x?itag=18" }], "360p"), null);
 
   const fetcher = async (url) => String(url).includes("oembed")
