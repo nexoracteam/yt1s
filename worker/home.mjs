@@ -1,45 +1,87 @@
-// Runs the worker on a home connection and publishes it through a free Cloudflare quick tunnel.
-// The tunnel URL changes on every start, so it is announced to the always-on worker, which the sites ask.
-// If this machine or the tunnel is down, the sites simply use the always-on worker instead.
+// Home agent: lets this PC (a normal home connection, which YouTube trusts far more than a datacenter) do the
+// work for the always-on worker. It only makes OUTBOUND HTTPS calls to that worker, so no tunnel, port
+// forwarding or third-party service is needed. If this PC is off, the worker simply handles downloads itself.
+//   extract task -> yt-dlp runs here and the format info is sent back
+//   stream task  -> ffmpeg runs here and the finished MP4/M4A is uploaded, which the worker pipes to the visitor
 import { spawn } from "node:child_process";
-import { createWorker } from "./server.js";
+import { Readable } from "node:stream";
+import { DownloadError, failureCode } from "./download-errors.js";
+import { formatSelector, runCommand, ytDlpArgs } from "./download-support.js";
+import { streamArgs } from "./stream-download.js";
 
-const port = Number(process.env.PORT || 8787);
-const registry = (process.env.FALLBACK_WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
-process.env.FALLBACK_WORKER_URL = registry;
-process.env.FULL_DIRECT_STRATEGIES ||= "true";
-if (!process.env.HOME_SECRET) { console.error("HOME_SECRET is required"); process.exit(1); }
+const server = (process.env.WORKER_URL || "https://yt1s-worker-b6abf79b9888.herokuapp.com").replace(/\/$/, "");
+const secret = process.env.HOME_SECRET;
+if (!secret) { console.error("HOME_SECRET is required"); process.exit(1); }
+const auth = { Authorization: `Bearer ${secret}` };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const strategies = [
+  { name: "default" },
+  { name: "modern-tv", playerClients: "tv_samsung,visionos,web" },
+  { name: "vr-embedded", playerClients: "android_vr,web_embedded" }
+];
 
-const app = await createWorker();
-app.listen(port, "127.0.0.1", () => console.log(`home worker listening on ${port}`));
+// Only what the worker needs to build the ffmpeg command, so the upload stays small.
+function slim(info) {
+  const pick = (format) => ({ url: format.url, http_headers: format.http_headers, vcodec: format.vcodec, acodec: format.acodec, ext: format.ext, height: format.height });
+  return {
+    title: info.title, thumbnail: info.thumbnail, duration: info.duration, height: info.height, availability: info.availability,
+    is_live: info.is_live, live_status: info.live_status, filesize: info.filesize, filesize_approx: info.filesize_approx,
+    ...pick(info), ...(info.requested_formats ? { requested_formats: info.requested_formats.map(pick) } : {})
+  };
+}
 
-async function register() {
-  const url = process.env.PUBLIC_WORKER_URL;
-  if (!url) return;
+async function extract({ videoId, quality }) {
+  let lastError;
+  for (const strategy of strategies) {
+    try {
+      const args = ytDlpArgs({ playerClients: strategy.playerClients });
+      const { stdout } = await runCommand("yt-dlp", [...args, "--dump-single-json", "--skip-download", "-f", formatSelector(quality), `https://www.youtube.com/watch?v=${videoId}`]);
+      const info = JSON.parse(stdout);
+      streamArgs(info, quality); // throws if there is no usable format
+      return { ok: true, info: slim(info), strategy: strategy.name };
+    } catch (error) { lastError = error; }
+  }
+  return { ok: false, code: failureCode(lastError instanceof Error ? lastError : new DownloadError("SOURCE_BUSY")) };
+}
+
+async function handleExtract(task) {
+  const started = Date.now();
+  const result = await extract(task);
+  console.log(`extract ${task.videoId} ${task.quality}: ${result.ok ? `ok via ${result.strategy}` : `failed ${result.code}`} in ${Date.now() - started}ms`);
+  await fetch(`${server}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: result.ok, info: result.info, code: result.code }), signal: AbortSignal.timeout(20000) }).catch((error) => console.error("result upload failed", error.message));
+}
+
+async function handleStream(task) {
+  const started = Date.now();
+  const abort = new AbortController();
+  const child = spawn("ffmpeg", streamArgs(task.info, task.quality), { stdio: ["ignore", "pipe", "pipe"] });
+  let bytes = 0, stderr = "";
+  child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-1500); });
+  child.stdout.on("data", (chunk) => { bytes += chunk.length; });
+  child.once("close", (code) => { if (code !== 0) abort.abort(); });
+  child.once("error", () => abort.abort());
   try {
-    const response = await fetch(`${registry}/home/register`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.HOME_SECRET}` },
-      body: JSON.stringify({ url }), signal: AbortSignal.timeout(10000)
+    await fetch(`${server}/agent/upload/${task.streamId}`, {
+      method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" },
+      body: Readable.toWeb(child.stdout), duplex: "half", signal: abort.signal
     });
-    if (!response.ok) console.error("register failed", response.status);
-  } catch (error) { console.error("register error", error.message); }
+    console.log(`stream ${task.streamId}: ${bytes} bytes in ${Date.now() - started}ms`);
+  } catch (error) {
+    child.kill();
+    console.error(`stream ${task.streamId} failed after ${bytes} bytes: ${error.message} ${stderr.replace(/https?:\/\/\S+/g, "<url>").slice(-200)}`);
+  }
 }
 
-function startTunnel() {
-  const child = spawn(process.env.CLOUDFLARED_BIN || "cloudflared", ["tunnel", "--no-autoupdate", "--url", `http://127.0.0.1:${port}`], { stdio: ["ignore", "ignore", "pipe"] });
-  child.stderr.on("data", (chunk) => {
-    const text = String(chunk);
-    if (/(ERR|WRN)/.test(text)) console.error("cloudflared:", text.replace(/\s+/g, " ").slice(0, 300));
-    // cloudflared also prints its own API address (api.trycloudflare.com); only the assigned tunnel counts.
-    const match = [...text.matchAll(/https:\/\/([a-z0-9-]+)\.trycloudflare\.com/g)].find((m) => m[1] !== "api");
-    if (match && process.env.PUBLIC_WORKER_URL !== match[0]) {
-      process.env.PUBLIC_WORKER_URL = match[0];
-      console.log("tunnel up:", match[0]);
-      void register();
-    }
-  });
-  child.on("error", (error) => { console.error("cloudflared error:", error.message); setTimeout(startTunnel, 15000); });
-  child.on("close", () => { process.env.PUBLIC_WORKER_URL = ""; console.log("tunnel closed, restarting"); setTimeout(startTunnel, 5000); });
+console.log(`home agent polling ${server}`);
+for (;;) {
+  try {
+    const response = await fetch(`${server}/agent/next`, { headers: auth, signal: AbortSignal.timeout(40000) });
+    if (response.status === 200) {
+      const task = await response.json();
+      void (task.type === "extract" ? handleExtract(task) : handleStream(task)).catch((error) => console.error("task error", error.message));
+    } else if (response.status === 401) { console.error("worker rejected HOME_SECRET"); await sleep(30000); }
+    else if (response.status !== 204) await sleep(3000);
+  } catch (error) {
+    await sleep(3000);
+  }
 }
-startTunnel();
-setInterval(register, 60000);

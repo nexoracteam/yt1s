@@ -7,6 +7,7 @@ import { DownloadError, failureCode, publicFailure } from "./download-errors.js"
 import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
 import { probeMedia, streamArgs, streamMedia } from "./stream-download.js";
 import { apifyExtract, createApifyBudget } from "./apify-fallback.js";
+import { createAgentRelay } from "./agent-relay.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RETRY_CODES = new Set(["SOURCE_BUSY", "TIMEOUT", "FORMAT_UNAVAILABLE", "DOWNLOAD_FAILED"]);
@@ -55,6 +56,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     return warpState.up;
   }
   const failureCacheMs = Number(env.FAILURE_CACHE_MS ?? 45000);
+  const relay = createAgentRelay({ secret: env.HOME_SECRET, extractTimeoutMs: Number(env.AGENT_EXTRACT_TIMEOUT_MS || 60000) });
   const jobs = new Map();
   const sources = new Map();
   let activeStreams = 0;
@@ -62,6 +64,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const queue = [];
   let active = 0;
   const app = express();
+  relay.register(app);
   app.use(express.json({ limit: "16kb" }));
 
   function requireSecret(req, res, next) {
@@ -143,8 +146,29 @@ export async function createWorker({ env = process.env, directory = path.join(__
         ] : [])
       ];
       const strategies = [...cookieStrategies, ...warpStrategies, ...directStrategies];
-      let selectedInfo, selectedProxy;
-      for (let attempt = 0; attempt < strategies.length; attempt++) {
+      let selectedInfo, selectedProxy, viaHome = false;
+      // A connected home agent (residential IP) extracts first; if it fails or is offline the normal routes run.
+      if (relay.online()) {
+        try {
+          job.status = "checking";
+          const info = await relay.extract({ jobId: job.id, videoId: job.videoId, quality: job.quality });
+          if (info.is_live || info.live_status === "is_upcoming") throw new DownloadError("LIVE_VIDEO");
+          if (Number(info.duration || 0) > maxDuration) throw new DownloadError("DURATION_LIMIT");
+          if (["private", "premium_only", "subscriber_only", "needs_auth"].includes(info.availability)) throw new DownloadError("VIDEO_UNAVAILABLE");
+          streamArgs(info, job.quality);
+          const estimate = Number(info.filesize || info.filesize_approx || 0);
+          if (estimate > maxBytes) throw new DownloadError("FILE_LIMIT");
+          job.title = info.title; job.thumbnail = info.thumbnail; job.duration = Number(info.duration || 0);
+          job.actualQuality = job.quality === "audio" ? "audio" : info.height ? `${info.height}p` : job.quality;
+          job.estimatedBytes = estimate;
+          selectedInfo = info; viaHome = true;
+        } catch (error) {
+          const code = failureCode(error);
+          log(JSON.stringify({ event: "home_extract_failed", jobId: job.id, code }));
+          if (!RETRY_CODES.has(code)) throw error;
+        }
+      }
+      for (let attempt = 0; attempt < strategies.length && !selectedInfo; attempt++) {
         await mkdir(jobDir, { recursive: true });
         let cookiePath;
         let stage = "extract";
@@ -191,7 +215,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
         }
       }
       const token = nanoid(32);
-      sources.set(job.id, { info: selectedInfo, token, proxy: selectedProxy });
+      sources.set(job.id, { info: selectedInfo, token, proxy: selectedProxy, home: viaHome });
       const origin = env.PUBLIC_WORKER_URL || ("https://yt1s-worker-b6abf79b9888.herokuapp.com");
       job.downloadUrl = `${origin}/stream/${job.id}?token=${token}`;
       job.expiresAt = new Date(Date.now() + ttlMs).toISOString();
@@ -294,7 +318,10 @@ export async function createWorker({ env = process.env, directory = path.join(__
     if (activeStreams >= streamConcurrency) return res.status(503).send("The download is still preparing. Please try the download button again in a moment.");
     if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
     activeStreams++;
-    try { await stream(req, res, source.info, job.quality, { maxBytes, log, proxy: source.proxy }); }
+    try {
+      if (source.home && relay.online()) await relay.stream(req, res, { info: source.info, quality: job.quality });
+      else await stream(req, res, source.info, job.quality, { maxBytes, log, proxy: source.proxy });
+    }
     catch { if (!res.headersSent) res.status(502).send("Please generate a fresh download link."); else res.destroy(); }
     finally { activeStreams--; }
   });

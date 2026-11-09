@@ -311,3 +311,39 @@ test("Apify is a paid last resort: used only with a token, mapped formats, daily
   assert.equal(second.status, "failed");
   assert.equal(calls, 1);
 });
+
+test("home agent relay: extraction and streaming go through outbound-only agent calls", async (t) => {
+  const auth = { Authorization: "Bearer agent-secret" };
+  const f = await fixture(t, {
+    env: { HOME_SECRET: "agent-secret", YOUTUBE_COOKIES: undefined },
+    async run() { throw new Error("local extraction must not run while the agent is online"); },
+    async stream() { throw new Error("local ffmpeg must not run for agent jobs"); }
+  });
+  // The agent long-polls; the first poll also marks it online.
+  const poll = () => fetch(`${f.base}/agent/next`, { headers: auth });
+  const firstPoll = poll();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const started = await f.start();
+  const task = await (await firstPoll).json();
+  assert.equal(task.type, "extract");
+  assert.equal(task.videoId, "RpJ4UWDjyeU");
+  const info = { title: "Hello", duration: 10, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" };
+  assert.equal((await fetch(`${f.base}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: true, info }) })).status, 200);
+  const job = await f.finish(started.jobId);
+  assert.equal(job.status, "completed");
+  assert.equal(job.title, "Hello");
+
+  // Visitor opens the download link; the agent receives a stream task and uploads the bytes.
+  const nextPoll = poll();
+  const visitor = fetch(job.downloadUrl.replace(/^https?:\/\/[^/]+/, f.base));
+  const streamTask = await (await nextPoll).json();
+  assert.equal(streamTask.type, "stream");
+  assert.equal(streamTask.info.title, "Hello");
+  const upload = await fetch(`${f.base}/agent/upload/${streamTask.streamId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: "FAKE-MP4-BYTES" });
+  assert.equal(upload.status, 200);
+  const response = await visitor;
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "video/mp4");
+  assert.equal(await response.text(), "FAKE-MP4-BYTES");
+  assert.equal((await fetch(`${f.base}/agent/next`, { headers: { Authorization: "Bearer wrong" } })).status, 401);
+});

@@ -96,6 +96,15 @@ export function streamArgs(info, quality, { proxy } = {}) {
   return [...args, ...fragment, "-f", "mp4", "pipe:1"];
 }
 
+export function streamHeaders(info, quality) {
+  const filename = `${String(info.title || "video").replace(/[\r\n/\\<>:"|?*]/g, "_").slice(0, 100)}.${quality === "audio" ? "m4a" : "mp4"}`;
+  return {
+    "Content-Type": quality === "audio" ? "audio/mp4" : "video/mp4",
+    "Content-Disposition": `attachment; filename="download.${quality === "audio" ? "m4a" : "mp4"}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"
+  };
+}
+
 export function streamMedia(req, res, info, quality, { maxBytes, proxy, spawnProcess = spawn, log = console.log } = {}) {
   const args = streamArgs(info, quality, { proxy });
   const child = spawnProcess("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
