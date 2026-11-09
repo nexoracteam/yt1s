@@ -73,7 +73,7 @@ export function streamArgs(info, quality, { proxy } = {}) {
   for (const input of inputs) {
     const url = mediaUrl(input.url);
     if (!url) throw new DownloadError("FORMAT_UNAVAILABLE");
-    args.push("-protocol_whitelist", "https,tls,tcp,crypto,http,httpproxy", "-rw_timeout", "20000000", "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "3");
+    args.push("-protocol_whitelist", "https,tls,tcp,crypto,http,httpproxy", "-rw_timeout", "20000000", "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "3");
     // Media URLs are bound to the IP that extracted them, so a WARP-extracted link must also stream through WARP.
     if (proxy) args.push("-http_proxy", proxy);
     const headers = mediaHeaders(input.http_headers || info.http_headers);

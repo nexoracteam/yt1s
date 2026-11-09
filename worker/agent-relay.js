@@ -6,7 +6,7 @@ import { streamHeaders } from "./stream-download.js";
 // Lets a worker on a home connection serve downloads without any inbound route (no tunnel, no port forwarding).
 // The home agent only makes outbound HTTPS calls to this server: it long-polls for tasks, returns extraction
 // results, and uploads finished media, which this server pipes straight to the visitor.
-export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 25000, extractTimeoutMs = 60000, uploadWaitMs = 30000 } = {}) {
+export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 25000, extractTimeoutMs = 60000, uploadWaitMs = 45000 } = {}) {
   let lastPoll = 0;
   let waiter = null;
   const tasks = [];
@@ -67,20 +67,25 @@ export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 2500
         res.json({ ok: true });
       });
 
-      app.post("/agent/upload/:streamId", (req, res) => {
+      // Media arrives as many short POSTs instead of one long upload: Heroku's router drops a single
+      // request that runs ~90s (H28), and short requests also give the agent backpressure.
+      app.post("/agent/chunk/:streamId", express.raw({ type: () => true, limit: "16mb" }), (req, res) => {
         if (!authed(req)) return res.status(401).end();
         const pending = streams.get(req.params.streamId);
         if (!pending) return res.status(404).end();
-        streams.delete(req.params.streamId);
-        clearTimeout(pending.timer);
         const out = pending.res;
-        out.status(200).set(streamHeaders(pending.info, pending.quality));
-        // If the agent aborts mid-file the visitor's download must fail rather than look complete.
-        req.on("aborted", () => out.destroy());
-        req.on("error", () => out.destroy());
-        out.on("close", () => { req.unpipe(out); if (!req.complete) req.destroy(); pending.resolve(); });
-        req.on("end", () => { out.end(); res.json({ ok: true }); });
-        req.pipe(out, { end: false });
+        clearTimeout(pending.timer);
+        const finishStream = () => { streams.delete(req.params.streamId); clearTimeout(pending.idle); pending.resolve(); };
+        if (req.query.abort === "1") { out.destroy(); finishStream(); return res.json({ ok: true }); }
+        if (!out.headersSent) out.status(200).set(streamHeaders(pending.info, pending.quality));
+        clearTimeout(pending.idle);
+        pending.idle = setTimeout(() => { out.destroy(); finishStream(); }, 120000);
+        const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+        const done = () => {
+          if (req.query.end === "1") { out.end(); finishStream(); }
+          res.json({ ok: true });
+        };
+        if (body.length && !out.write(body)) out.once("drain", done); else done();
       });
     }
   };

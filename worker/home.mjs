@@ -4,7 +4,6 @@
 //   extract task -> yt-dlp runs here and the format info is sent back
 //   stream task  -> ffmpeg runs here and the finished MP4/M4A is uploaded, which the worker pipes to the visitor
 import { spawn } from "node:child_process";
-import { Readable } from "node:stream";
 import { DownloadError, failureCode } from "./download-errors.js";
 import { formatSelector, runCommand, ytDlpArgs } from "./download-support.js";
 import { streamArgs } from "./stream-download.js";
@@ -53,22 +52,41 @@ async function handleExtract(task) {
 
 async function handleStream(task) {
   const started = Date.now();
-  const abort = new AbortController();
   const child = spawn("ffmpeg", streamArgs(task.info, task.quality), { stdio: ["ignore", "pipe", "pipe"] });
-  let bytes = 0, stderr = "";
+  const url = `${server}/agent/chunk/${task.streamId}`;
+  let pending = [], size = 0, total = 0, seq = 0, sending = false, closed = false, aborted = false, stderr = "";
   child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-1500); });
-  child.stdout.on("data", (chunk) => { bytes += chunk.length; });
-  child.once("close", (code) => { if (code !== 0) abort.abort(); });
-  child.once("error", () => abort.abort());
-  try {
-    await fetch(`${server}/agent/upload/${task.streamId}`, {
-      method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" },
-      body: Readable.toWeb(child.stdout), duplex: "half", signal: abort.signal
-    });
-    console.log(`stream ${task.streamId}: ${bytes} bytes in ${Date.now() - started}ms`);
-  } catch (error) {
-    child.kill();
-    console.error(`stream ${task.streamId} failed after ${bytes} bytes: ${error.message} ${stderr.replace(/https?:\/\/\S+/g, "<url>").slice(-200)}`);
+
+  // Sends buffered bytes as one short POST; only one is in flight so order is preserved.
+  async function flush(end = false) {
+    if (sending || aborted) return;
+    if (!pending.length && !end) return;
+    sending = true;
+    const body = Buffer.concat(pending);
+    pending = []; size = 0;
+    try {
+      const response = await fetch(`${url}?seq=${seq++}${end ? "&end=1" : ""}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body, signal: AbortSignal.timeout(60000) });
+      total += body.length;
+      if (!response.ok) { aborted = true; child.kill(); }
+    } catch { aborted = true; child.kill(); }
+    sending = false;
+    child.stdout.resume();
+  }
+
+  const timer = setInterval(() => { void flush(); }, 1500);
+  child.stdout.on("data", (chunk) => {
+    pending.push(chunk); size += chunk.length;
+    if (size >= 1024 * 1024) void flush();
+    if (size >= 8 * 1024 * 1024) child.stdout.pause();
+  });
+  await new Promise((resolve) => child.once("close", (code) => { closed = true; clearInterval(timer); aborted = aborted || code !== 0; resolve(); }));
+  while (sending) await sleep(50);
+  if (aborted) {
+    await fetch(`${url}?abort=1`, { method: "POST", headers: auth, signal: AbortSignal.timeout(10000) }).catch(() => {});
+    console.error(`stream ${task.streamId} failed after ${total} bytes: ${stderr.replace(/https?:\/\/\S+/g, "<url>").slice(-200)}`);
+  } else {
+    await flush(true);
+    console.log(`stream ${task.streamId}: ${total} bytes in ${Date.now() - started}ms`);
   }
 }
 

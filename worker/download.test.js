@@ -339,8 +339,9 @@ test("home agent relay: extraction and streaming go through outbound-only agent 
   const streamTask = await (await nextPoll).json();
   assert.equal(streamTask.type, "stream");
   assert.equal(streamTask.info.title, "Hello");
-  const upload = await fetch(`${f.base}/agent/upload/${streamTask.streamId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: "FAKE-MP4-BYTES" });
-  assert.equal(upload.status, 200);
+  const chunk = (query, body) => fetch(`${f.base}/agent/chunk/${streamTask.streamId}?${query}`, { method: "POST", headers: { ...auth, "Content-Type": "application/octet-stream" }, body });
+  assert.equal((await chunk("seq=0", "FAKE-MP4-")).status, 200);
+  assert.equal((await chunk("seq=1&end=1", "BYTES")).status, 200);
   const response = await visitor;
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "video/mp4");
