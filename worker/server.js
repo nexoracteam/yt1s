@@ -62,6 +62,24 @@ export async function createWorker({ env = process.env, directory = path.join(__
   const jobs = new Map();
   const sources = new Map();
   let activeStreams = 0;
+  // When every stream slot is busy, visitors wait (up to STREAM_WAIT_MS) for the next free one instead of getting an
+  // error, so a traffic spike slows downloads down but does not break them.
+  const streamWaiters = [];
+  const streamWaitMs = Number(env.STREAM_WAIT_MS || 45000);
+  function acquireStream(req) {
+    if (activeStreams < streamConcurrency) { activeStreams++; return Promise.resolve(true); }
+    return new Promise((resolve) => {
+      const entry = { grant: () => { clearTimeout(timer); activeStreams++; resolve(true); } };
+      const drop = () => { const at = streamWaiters.indexOf(entry); if (at >= 0) streamWaiters.splice(at, 1); };
+      const timer = setTimeout(() => { drop(); resolve(false); }, streamWaitMs);
+      req.once("close", () => { clearTimeout(timer); drop(); resolve(false); });
+      streamWaiters.push(entry);
+    });
+  }
+  function releaseStream() {
+    activeStreams--;
+    while (streamWaiters.length && activeStreams < streamConcurrency) streamWaiters.shift().grant();
+  }
   const byVideo = new Map();
   const queue = [];
   let active = 0;
@@ -278,7 +296,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
       cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
-      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), activeStreams, streamLimit: streamConcurrency, maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), activeStreams, streamWaiting: streamWaiters.length, streamLimit: streamConcurrency, queued: queue.length, maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
   });
@@ -335,15 +353,14 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const job = jobs.get(req.params.id);
     const source = sources.get(req.params.id);
     if (!job || !source || req.query.token !== source.token) return res.status(404).send("Download link expired. Please generate a fresh link.");
-    if (activeStreams >= streamConcurrency) return res.status(503).send("The download is still preparing. Please try the download button again in a moment.");
     if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
-    activeStreams++;
+    if (!(await acquireStream(req))) { if (!res.headersSent && !req.destroyed) res.status(503).send("The download is still preparing. Please try the download button again in a moment."); return; }
     try {
       if (source.home && relay.online()) await relay.stream(req, res, { info: source.info, quality: job.quality });
       else await stream(req, res, source.info, job.quality, { maxBytes, log, proxy: source.proxy });
     }
     catch { if (!res.headersSent) res.status(502).send("Please generate a fresh download link."); else res.destroy(); }
-    finally { activeStreams--; }
+    finally { releaseStream(); }
   });
 
   app.use((error, req, res, next) => {

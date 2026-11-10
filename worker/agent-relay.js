@@ -8,14 +8,16 @@ import { streamHeaders } from "./stream-download.js";
 // results, and uploads finished media, which this server pipes straight to the visitor.
 export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 25000, extractTimeoutMs = 60000, uploadWaitMs = 45000, drainWaitMs = 15000 } = {}) {
   let lastPoll = 0;
-  let waiter = null;
+  // Several home agents can poll at the same time; a task goes to whichever is waiting first.
+  const waiters = [];
   const tasks = [];
   const extractions = new Map();
   const streams = new Map();
   const authed = (req) => Boolean(secret) && req.headers.authorization === `Bearer ${secret}`;
 
   function push(task) {
-    if (waiter) { clearTimeout(waiter.timer); const { res } = waiter; waiter = null; res.json(task); }
+    const next = waiters.shift();
+    if (next) { clearTimeout(next.timer); next.res.json(task); }
     else tasks.push(task);
   }
 
@@ -26,6 +28,7 @@ export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 2500
     extract({ jobId, videoId, quality }) {
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => { extractions.delete(jobId); reject(new DownloadError("SOURCE_BUSY")); }, extractTimeoutMs);
+        timer.unref?.();
         extractions.set(jobId, { resolve, reject, timer });
         push({ type: "extract", jobId, videoId, quality });
       });
@@ -39,6 +42,7 @@ export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 2500
           if (!res.headersSent) res.status(502).type("text/plain").send("This download link could not be opened. Return to the tool and generate a fresh link.");
           resolve();
         }, uploadWaitMs);
+        timer.unref?.();
         streams.set(streamId, { res, timer, info, quality, resolve });
         res.once("close", () => { clearTimeout(timer); streams.delete(streamId); resolve(); });
         push({ type: "stream", streamId, info, quality });
@@ -49,11 +53,11 @@ export function createAgentRelay({ secret, now = () => Date.now(), pollMs = 2500
       app.get("/agent/next", (req, res) => {
         if (!authed(req)) return res.status(401).end();
         lastPoll = now();
-        if (waiter) { clearTimeout(waiter.timer); waiter.res.status(204).end(); waiter = null; }
         if (tasks.length) return res.json(tasks.shift());
-        const mine = { res, timer: setTimeout(() => { if (waiter === mine) waiter = null; res.status(204).end(); }, pollMs) };
-        waiter = mine;
-        req.on("close", () => { if (waiter === mine) { clearTimeout(mine.timer); waiter = null; } });
+        const mine = { res, timer: setTimeout(() => { const at = waiters.indexOf(mine); if (at >= 0) waiters.splice(at, 1); res.status(204).end(); }, pollMs) };
+        mine.timer.unref?.();
+        waiters.push(mine);
+        req.on("close", () => { clearTimeout(mine.timer); const at = waiters.indexOf(mine); if (at >= 0) waiters.splice(at, 1); });
       });
 
       app.post("/agent/result/:jobId", express.json({ limit: "2mb" }), (req, res) => {

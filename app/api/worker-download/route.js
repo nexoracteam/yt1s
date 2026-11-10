@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { isYouTubeInput } from "../../../lib/youtube";
+import { extractVideoId, isYouTubeInput } from "../../../lib/youtube";
+import { liteExtract } from "../../../lib/lite-extract";
 import { DownloadError, publicFailure, safeDownloadMessage } from "../../../worker/download-errors";
 
 export const runtime = "nodejs";
@@ -44,6 +45,19 @@ async function backupStart(videoId, quality) {
   return callWorker(BACKUP_WORKER, "/download", { method: "POST", body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${videoId}`, quality }) }, 20000);
 }
 
+// Every worker is down or has given up on this video: serve the free 360p straight from this site's backend.
+async function lastResort(isPost, options, result) {
+  const data = result?.data;
+  const unusable = !result || !data || typeof data !== "object" || result.response.status >= 500;
+  let videoId = "", quality = "720p";
+  if (isPost && unusable) {
+    try { const body = JSON.parse(options.body); videoId = extractVideoId(body.url); quality = body.quality || quality; } catch {}
+  } else if (!isPost && data?.status === "failed" && data.videoId) {
+    videoId = data.videoId; quality = data.quality || quality;
+  }
+  return videoId ? liteExtract(videoId, quality) : null;
+}
+
 async function proxy(path, options = {}) {
   try {
     const isPost = options.method === "POST";
@@ -83,6 +97,8 @@ async function proxy(path, options = {}) {
         } catch { result = primary; }
       } else result = primary;
     }
+    const lite = await lastResort(isPost, options, result);
+    if (lite) return NextResponse.json(lite, { status: 200, headers: { "Cache-Control": "no-store" } });
     if (!result) return failure("SERVICE_BUSY", 503);
     const { response, data } = result;
     if (!data || typeof data !== "object") return failure("SERVICE_BUSY", 502);

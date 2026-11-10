@@ -65,7 +65,7 @@ async function checkSite(site, env) {
 async function workerHealth(base = WORKER) {
   try {
     const health = await (await fetch(`${base}/health`, { signal: AbortSignal.timeout(15000) })).json();
-    return { ok: Boolean(health.ok), warp: health.warp, agentOnline: health.agentOnline, cookies: health.healthyCookieAccounts, agent: health.agentOnline };
+    return { ok: Boolean(health.ok), warp: health.warp, agentOnline: health.agentOnline, cookies: health.healthyCookieAccounts, agent: health.agentOnline, active: health.activeStreams, limit: health.streamLimit, waiting: health.streamWaiting, queued: health.queued };
   } catch { return { ok: false }; }
 }
 
@@ -117,6 +117,22 @@ async function run(env) {
     if (h.ok && before.alerted) recoveries.push({ name: label, detail: "wapas theek", downMinutes: 0 });
     state[key] = { fails, alerted };
   }
+
+  // Traffic warning (not a failure): streams near the limit, or visitors already waiting for a free slot.
+  const busy = health.ok && health.limit ? health.active / health.limit >= 0.8 || (health.waiting || 0) > 0 : false;
+  const loadBefore = previous?._load || { hot: 0, alerted: false };
+  const hotRuns = busy ? loadBefore.hot + 1 : 0;
+  let loadAlerted = busy ? loadBefore.alerted : false;
+  if (busy && hotRuns >= CONFIRM_RUNS && !loadAlerted) {
+    await discord(env, {
+      title: "🟠 Traffic zyada hai",
+      color: 0xfb8c00,
+      description: `Streams ${health.active}/${health.limit} chal rahi hain, ${health.waiting || 0} intezaar mein, ${health.queued || 0} prepare queue mein. Downloads dheeme ho sakte hain par chal rahi hain.`,
+      fields: [{ name: "Status", value: describe(health) }]
+    });
+    loadAlerted = true;
+  }
+  state._load = { hot: hotRuns, alerted: loadAlerted };
 
   if (alerts.length) {
     await discord(env, {

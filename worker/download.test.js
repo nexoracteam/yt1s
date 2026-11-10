@@ -472,3 +472,38 @@ test("HLS inputs bypass the ranged proxy, plain googlevideo files use it", () =>
   assert.equal(usesHls({ url: "https://r1.googlevideo.com/videoplayback?x=1", protocol: "m3u8_native" }), true);
   assert.equal(usesHls({ requested_formats: [{ url: "https://r1.googlevideo.com/videoplayback?a=1" }, { url: "https://r1.googlevideo.com/videoplayback?b=1" }] }), false);
 });
+
+test("several agents can poll at once and each gets a different task", async (t) => {
+  const auth = { Authorization: "Bearer agent-secret" };
+  const f = await fixture(t, { env: { HOME_SECRET: "agent-secret" }, async run() { throw new Error("no local extraction"); } });
+  const agentA = fetch(`${f.base}/agent/next`, { headers: auth });
+  const agentB = fetch(`${f.base}/agent/next`, { headers: auth });
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const one = await f.start("https://youtu.be/RpJ4UWDjyeU");
+  const two = await f.start("https://youtu.be/aaaaaaaaaaa");
+  const [taskA, taskB] = await Promise.all([agentA.then((r) => r.json()), agentB.then((r) => r.json())]);
+  assert.equal(taskA.type, "extract");
+  assert.equal(taskB.type, "extract");
+  assert.notEqual(taskA.jobId, taskB.jobId);
+  assert.ok(one.jobId && two.jobId);
+});
+
+test("a full set of stream slots makes visitors wait for a free slot instead of failing", async (t) => {
+  const release = [];
+  const f = await fixture(t, {
+    env: { STREAM_CONCURRENCY: "1", STREAM_WAIT_MS: "5000", YOUTUBE_COOKIES: undefined },
+    async run() { return { stdout: JSON.stringify({ title: "V", duration: 5, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }) }; },
+    async stream(req, res) { await new Promise((resolve) => release.push(resolve)); res.end("done"); }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  const link = job.downloadUrl.replace(/^https?:\/\/[^/]+/, f.base);
+  const first = fetch(link).then((r) => r.text());
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const second = fetch(link).then(async (r) => ({ status: r.status, body: await r.text() }));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  release.shift()();
+  assert.equal(await first, "done");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  release.shift()();
+  assert.deepEqual(await second, { status: 200, body: "done" });
+});

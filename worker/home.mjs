@@ -43,9 +43,26 @@ async function extract({ videoId, quality }) {
   return { ok: false, code: failureCode(lastError instanceof Error ? lastError : new DownloadError("SOURCE_BUSY")) };
 }
 
+// Limits so a traffic spike cannot overwhelm this PC: at most a few yt-dlp runs at once, and the agent stops
+// polling for new work while it is busy (tasks then wait on the worker or go to another agent).
+const MAX_EXTRACT = Number(process.env.AGENT_MAX_EXTRACT || 4);
+const MAX_TASKS = Number(process.env.AGENT_MAX_TASKS || 16);
+let runningExtract = 0, runningTasks = 0;
+const extractWaiters = [];
+async function extractSlot() {
+  if (runningExtract < MAX_EXTRACT) { runningExtract++; return; }
+  await new Promise((resolve) => extractWaiters.push(resolve));
+}
+function extractDone() {
+  const next = extractWaiters.shift();
+  if (next) next(); else runningExtract--;
+}
+
 async function handleExtract(task) {
   const started = Date.now();
-  const result = await extract(task);
+  await extractSlot();
+  let result;
+  try { result = await extract(task); } finally { extractDone(); }
   console.log(`extract ${task.videoId} ${task.quality}: ${result.ok ? `ok via ${result.strategy}` : `failed ${result.code}`} in ${Date.now() - started}ms`);
   await fetch(`${server}/agent/result/${task.jobId}`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ ok: result.ok, info: result.info, code: result.code }), signal: AbortSignal.timeout(20000) }).catch((error) => console.error("result upload failed", error.message));
 }
@@ -99,10 +116,12 @@ async function handleStream(task) {
 console.log(`home agent polling ${server}`);
 for (;;) {
   try {
+    if (runningTasks >= MAX_TASKS) { await sleep(500); continue; }
     const response = await fetch(`${server}/agent/next`, { headers: auth, signal: AbortSignal.timeout(40000) });
     if (response.status === 200) {
       const task = await response.json();
-      void (task.type === "extract" ? handleExtract(task) : handleStream(task)).catch((error) => console.error("task error", error.message));
+      runningTasks++;
+      void (task.type === "extract" ? handleExtract(task) : handleStream(task)).catch((error) => console.error("task error", error.message)).finally(() => { runningTasks--; });
     } else if (response.status === 401) { console.error("worker rejected HOME_SECRET"); await sleep(30000); }
     else if (response.status !== 204) await sleep(3000);
   } catch (error) {
