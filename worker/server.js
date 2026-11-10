@@ -278,7 +278,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
       cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
-      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), activeStreams, streamLimit: streamConcurrency, maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
   });
