@@ -214,6 +214,7 @@ export async function streamMedia(req, res, info, quality, { maxBytes, proxy, sp
     try { inputs = await startRangedInputs(mediaSources(info), { proxy }); }
     catch { if (!res.headersSent) res.status(502).type("text/plain").send("This download link could not be opened. Return to the tool and generate a fresh link."); return; }
   }
+  if (res.destroyed || res.writableEnded) { inputs?.close(); return; }
   const args = streamArgs(info, quality, inputs ? { inputUrls: inputs.urls } : { proxy });
   const child = spawnProcess("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
   let bytes = 0, started = false, finished = false, stderr = "";
@@ -231,7 +232,7 @@ export async function streamMedia(req, res, info, quality, { maxBytes, proxy, sp
     if (!started) {
       started = true;
       clearTimeout(firstByteTimer);
-      res.status(200).set({
+      if (!res.headersSent) res.status(200).set({
         "Content-Type": quality === "audio" ? "audio/mp4" : "video/mp4",
         "Content-Disposition": `attachment; filename="download.${quality === "audio" ? "m4a" : "mp4"}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
         "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"

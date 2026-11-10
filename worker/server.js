@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { nanoid } from "nanoid";
 import { DownloadError, failureCode, publicFailure } from "./download-errors.js";
 import { QUALITIES, createCookieStore, formatSelector, runCommand, videoIdFromInput, ytDlpArgs } from "./download-support.js";
-import { directLink, probeMedia, streamArgs, streamMedia } from "./stream-download.js";
+import { directLink, probeMedia, streamArgs, streamHeaders, streamMedia } from "./stream-download.js";
 import { apifyExtract, createApifyBudget } from "./apify-fallback.js";
 import { createAgentRelay } from "./agent-relay.js";
 import { ytultraExtract } from "./ytultra-fallback.js";
@@ -65,7 +65,11 @@ export async function createWorker({ env = process.env, directory = path.join(__
   // When every stream slot is busy, visitors wait (up to STREAM_WAIT_MS) for the next free one instead of getting an
   // error, so a traffic spike slows downloads down but does not break them.
   const streamWaiters = [];
-  const streamWaitMs = Number(env.STREAM_WAIT_MS || 45000);
+  const streamWaitMs = Number(env.STREAM_WAIT_MS || 50000);
+  // A slot is never held longer than this, whatever happens to the visitor or the agent (guards against leaks).
+  const maxStreamMs = Number(env.MAX_STREAM_MS || 45 * 60 * 1000);
+  const slotSince = new Map();
+  let slotSeq = 0;
   function acquireStream(req) {
     if (activeStreams < streamConcurrency) { activeStreams++; return Promise.resolve(true); }
     return new Promise((resolve) => {
@@ -296,7 +300,7 @@ export async function createWorker({ env = process.env, directory = path.join(__
     res.json({
       ok: true, app: "yt1s-video-worker", version: "disk-free-stream-v4",
       cloudinary: Boolean(env.CLOUDINARY_URL), youtubeCookies: cookies.available, cookieAccounts: cookies.accounts, healthyCookieAccounts: cookies.healthy?.() ?? 0, poTokenProvider,
-      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), activeStreams, streamWaiting: streamWaiters.length, streamLimit: streamConcurrency, queued: queue.length, maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
+      proxy: Boolean(env.YTDLP_PROXY), warp: await warpUp(), agentOnline: relay.online(), activeStreams, streamWaiting: streamWaiters.length, oldestStreamSeconds: slotSince.size ? Math.round((Date.now() - Math.min(...slotSince.values())) / 1000) : 0, streamLimit: streamConcurrency, queued: queue.length, maxDurationSeconds: maxDuration, maxFileMb: maxBytes / 1024 / 1024,
       prepareConcurrency, streamConcurrency, maxQueue
     });
   });
@@ -354,13 +358,22 @@ export async function createWorker({ env = process.env, directory = path.join(__
     const source = sources.get(req.params.id);
     if (!job || !source || req.query.token !== source.token) return res.status(404).send("Download link expired. Please generate a fresh link.");
     if (req.method === "HEAD") return res.status(200).set("Cache-Control", "no-store").end();
-    if (!(await acquireStream(req))) { if (!res.headersSent && !req.destroyed) res.status(503).send("The download is still preparing. Please try the download button again in a moment."); return; }
+    // Every slot busy: answer right away with the download headers. Heroku's router drops a request that has not
+    // started responding after 30s (H12) - the visitor would be cut off while we still hold a place for them.
+    if (activeStreams >= streamConcurrency) { res.status(200).set(streamHeaders(source.info, job.quality)); res.flushHeaders(); }
+    if (!(await acquireStream(req))) { if (!res.headersSent && !req.destroyed) res.status(503).send("The download is still preparing. Please try the download button again in a moment."); else res.destroy(); return; }
+    const slot = ++slotSeq;
+    slotSince.set(slot, Date.now());
+    let released = false;
+    const release = () => { if (released) return; released = true; slotSince.delete(slot); releaseStream(); };
+    const watchdog = setTimeout(() => { res.destroy(); release(); }, maxStreamMs);
+    watchdog.unref?.();
     try {
       if (source.home && relay.online()) await relay.stream(req, res, { info: source.info, quality: job.quality });
       else await stream(req, res, source.info, job.quality, { maxBytes, log, proxy: source.proxy });
     }
     catch { if (!res.headersSent) res.status(502).send("Please generate a fresh download link."); else res.destroy(); }
-    finally { releaseStream(); }
+    finally { clearTimeout(watchdog); release(); }
   });
 
   app.use((error, req, res, next) => {

@@ -507,3 +507,41 @@ test("a full set of stream slots makes visitors wait for a free slot instead of 
   release.shift()();
   assert.deepEqual(await second, { status: 200, body: "done" });
 });
+
+test("a stream slot is released by the watchdog even if the stream handler never finishes", async (t) => {
+  const f = await fixture(t, {
+    env: { STREAM_CONCURRENCY: "1", STREAM_WAIT_MS: "5000", MAX_STREAM_MS: "400", YOUTUBE_COOKIES: undefined },
+    async run() { return { stdout: JSON.stringify({ title: "V", duration: 5, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }) }; },
+    stream() { return new Promise(() => {}); } // hangs forever, like a leaked stream
+  });
+  const job = await f.finish((await f.start()).jobId);
+  const link = job.downloadUrl.replace(/^https?:\/\/[^/]+/, f.base);
+  fetch(link).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal((await (await fetch(`${f.base}/health`)).json()).activeStreams, 1);
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal((await (await fetch(`${f.base}/health`)).json()).activeStreams, 0, "watchdog must free the slot");
+});
+
+test("when all slots are busy the visitor gets the download headers immediately and waits for a slot", async (t) => {
+  const release = [];
+  const f = await fixture(t, {
+    env: { STREAM_CONCURRENCY: "1", STREAM_WAIT_MS: "5000", YOUTUBE_COOKIES: undefined },
+    async run() { return { stdout: JSON.stringify({ title: "V", duration: 5, height: 360, availability: "public", url: "https://x.googlevideo.com/v", vcodec: "avc1", acodec: "mp4a" }) }; },
+    async stream(req, res) { await new Promise((resolve) => release.push(resolve)); res.status(200).end("done"); }
+  });
+  const job = await f.finish((await f.start()).jobId);
+  const link = job.downloadUrl.replace(/^https?:\/\/[^/]+/, f.base);
+  const first = fetch(link).then((r) => r.text());
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const started = Date.now();
+  const second = await fetch(link); // resolves as soon as headers arrive, before a slot is free
+  assert.ok(Date.now() - started < 1500, "headers must not wait for a slot");
+  assert.equal(second.status, 200);
+  assert.match(second.headers.get("content-disposition") || "", /attachment/);
+  release.shift()();
+  assert.equal(await first, "done");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  release.shift()();
+  assert.equal(await second.text(), "done");
+});
